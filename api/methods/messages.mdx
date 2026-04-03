@@ -1,0 +1,155 @@
+---
+title: "Message methods"
+description: "TDLib API methods for sending, receiving, editing, and deleting messages."
+---
+
+## `sendMessage`
+
+Sends a message to a chat.
+
+<ParamField path="chat_id" type="int53" required>
+  The target chat ID.
+</ParamField>
+<ParamField path="message_thread_id" type="int53">
+  Thread (topic) ID for supergroups with topics enabled. Use `0` for the main thread.
+</ParamField>
+<ParamField path="reply_to" type="InputMessageReplyTo">
+  Optional reply target. Use `inputMessageReplyToMessage` with a `message_id`.
+</ParamField>
+<ParamField path="options" type="messageSendOptions">
+  Optional send options: `disable_notification`, `from_background`, `scheduling_state`, etc.
+</ParamField>
+<ParamField path="input_message_content" type="InputMessageContent" required>
+  The message content. Common types: `inputMessageText`, `inputMessagePhoto`, `inputMessageDocument`, `inputMessageVideo`, `inputMessageAudio`, `inputMessageSticker`.
+</ParamField>
+
+```json
+{
+  "@type": "sendMessage",
+  "chat_id": -1001234567890,
+  "input_message_content": {
+    "@type": "inputMessageText",
+    "text": {
+      "@type": "formattedText",
+      "text": "Hello, world!"
+    }
+  }
+}
+```
+
+**Returns:** `message`
+
+---
+
+## `sendMessageAlbum`
+
+Sends a group of messages (album) as a single unit.
+
+<ParamField path="chat_id" type="int53" required>
+  Target chat ID.
+</ParamField>
+<ParamField path="input_message_contents" type="vector<InputMessageContent>" required>
+  2–10 photo or video messages to bundle together.
+</ParamField>
+
+**Returns:** `messages`
+
+---
+
+## `editMessageText`
+
+Edits the text of a sent message.
+
+<ParamField path="chat_id" type="int53" required>Chat ID.</ParamField>
+<ParamField path="message_id" type="int53" required>Message ID to edit.</ParamField>
+<ParamField path="input_message_content" type="InputMessageContent" required>New content (must be `inputMessageText` or `inputMessageGame`).</ParamField>
+
+**Returns:** `message`
+
+---
+
+## `deleteMessages`
+
+Deletes messages permanently.
+
+<ParamField path="chat_id" type="int53" required>Chat ID.</ParamField>
+<ParamField path="message_ids" type="vector<int53>" required>List of message IDs to delete.</ParamField>
+<ParamField path="revoke" type="bool" required>If true, delete for all participants (where allowed).</ParamField>
+
+**Returns:** `ok`
+
+---
+
+## `getMessage`
+
+Fetches a single message by ID.
+
+<ParamField path="chat_id" type="int53" required>Chat ID.</ParamField>
+<ParamField path="message_id" type="int53" required>Message ID.</ParamField>
+
+**Returns:** `message`
+
+---
+
+## `getChatHistory`
+
+Fetches a portion of a chat's message history.
+
+<ParamField path="chat_id" type="int53" required>Chat ID.</ParamField>
+<ParamField path="from_message_id" type="int53">Start fetching from this message ID. Use `0` to start from the newest.</ParamField>
+<ParamField path="offset" type="int32">Offset from `from_message_id`. Use negative values to include messages before it.</ParamField>
+<ParamField path="limit" type="int32" required>Number of messages to return (1–100).</ParamField>
+<ParamField path="only_local" type="bool">Return only locally cached messages without a network request.</ParamField>
+
+**Returns:** `messages`
+
+---
+
+## `searchChatMessages`
+
+Searches for messages in a chat matching a query.
+
+<ParamField path="chat_id" type="int53" required>Chat ID.</ParamField>
+<ParamField path="query" type="string" required>Search query text.</ParamField>
+<ParamField path="filter" type="SearchMessagesFilter">Filter by content type (e.g. `searchMessagesFilterPhoto`, `searchMessagesFilterDocument`).</ParamField>
+<ParamField path="limit" type="int32" required>Maximum number of results.</ParamField>
+
+**Returns:** `foundChatMessages`
+
+---
+
+## `forwardMessages`
+
+Forwards messages from one chat to another.
+
+<ParamField path="chat_id" type="int53" required>Destination chat ID.</ParamField>
+<ParamField path="from_chat_id" type="int53" required>Source chat ID.</ParamField>
+<ParamField path="message_ids" type="vector<int53>" required>Message IDs to forward.</ParamField>
+<ParamField path="send_copy" type="bool">If true, send as copies without a forwarded header.</ParamField>
+<ParamField path="remove_caption" type="bool">If true, strip media captions.</ParamField>
+
+**Returns:** `messages`
+
+---
+
+## `pinMessage`
+
+Pins a message in a chat.
+
+<ParamField path="chat_id" type="int53" required>Chat ID.</ParamField>
+<ParamField path="message_id" type="int53" required>Message ID to pin.</ParamField>
+<ParamField path="disable_notification" type="bool">If true, pin silently.</ParamField>
+
+**Returns:** `ok`
+
+---
+
+## `viewMessages`
+
+Marks messages as read and increments view counters. Call this when messages become visible to the user.
+
+<ParamField path="chat_id" type="int53" required>Chat ID.</ParamField>
+<ParamField path="message_ids" type="vector<int53>" required>IDs of viewed messages.</ParamField>
+<ParamField path="force_read" type="bool">Mark as read even if the chat is open.</ParamField>
+
+**Returns:** `ok`

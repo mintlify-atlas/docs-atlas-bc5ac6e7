@@ -1,0 +1,211 @@
+---
+title: "Logging"
+description: "Configure TDLib's internal logging verbosity, output destination, and log message callbacks."
+---
+
+TDLib writes log messages to `stderr` (or an OS-specific log) at verbosity level 5 by default. You can change the verbosity level, redirect output to a file, or install a callback to receive log messages directly in your application code.
+
+## Verbosity levels
+
+The verbosity level controls which messages TDLib emits. Higher numbers produce more output.
+
+| Level | Meaning |
+|-------|---------|
+| `0` | Fatal errors only. TDLib crashes immediately after the log callback returns. |
+| `1` | Errors |
+| `2` | Warnings and debug warnings |
+| `3` | Informational |
+| `4` | Debug |
+| `5` | Verbose debug (default) |
+| `6`–`1024` | Trace — increasingly granular internal details |
+
+<Warning>
+  Setting the verbosity level to `0` means TDLib will call your log message callback and then **crash immediately** when a fatal error occurs. Do not call any TDLib methods from within the callback.
+</Warning>
+
+## Setting the verbosity level
+
+Use `setLogVerbosityLevel` as a synchronous request. It can be called before creating a client.
+
+<CodeGroup>
+
+```c C (JSON interface)
+// td_execute is synchronous and requires no client_id
+const char *result = td_execute(
+    "{\"@type\": \"setLogVerbosityLevel\", \"new_verbosity_level\": 2}"
+);
+```
+
+```cpp C++ (ClientManager)
+td::ClientManager::execute(
+    td::td_api::make_object<td::td_api::setLogVerbosityLevel>(2)
+);
+```
+
+```python Python (ctypes)
+execute({"@type": "setLogVerbosityLevel", "new_verbosity_level": 2})
+```
+
+</CodeGroup>
+
+<Note>
+  `setLogVerbosityLevel` is documented as "Can be called synchronously", so it works with `td_execute` / `ClientManager::execute` without a running client instance.
+</Note>
+
+## Setting the log stream
+
+Use `setLogStream` to redirect log output. Three stream types are available:
+
+| Stream type | Effect |
+|-------------|--------|
+| `logStreamDefault` | Write to `stderr` or the OS-specific log (default) |
+| `logStreamFile` | Write to a file, with optional maximum size and auto-rotation |
+| `logStreamEmpty` | Discard all log output |
+
+<CodeGroup>
+
+```c C (JSON interface) — write to file
+const char *result = td_execute(
+    "{\"@type\": \"setLogStream\","
+    " \"log_stream\": {"
+    "   \"@type\": \"logStreamFile\","
+    "   \"path\": \"/var/log/tdlib.log\","
+    "   \"max_file_size\": 10485760,"
+    "   \"redirect_stderr\": false"
+    " }}"
+);
+```
+
+```cpp C++ (ClientManager) — write to file
+td::ClientManager::execute(
+    td::td_api::make_object<td::td_api::setLogStream>(
+        td::td_api::make_object<td::td_api::logStreamFile>(
+            "/var/log/tdlib.log",
+            /*max_file_size=*/ 10 * 1024 * 1024,
+            /*redirect_stderr=*/ false
+        )
+    )
+);
+```
+
+```cpp C++ (ClientManager) — discard output
+td::ClientManager::execute(
+    td::td_api::make_object<td::td_api::setLogStream>(
+        td::td_api::make_object<td::td_api::logStreamEmpty>()
+    )
+);
+```
+
+</CodeGroup>
+
+The `max_file_size` field of `logStreamFile` controls when TDLib auto-rotates the log file. The default is 10 MB (10 485 760 bytes).
+
+## Log message callback
+
+You can install a callback to receive every log message that TDLib emits. This is useful for integrating TDLib's output into your application's own logging infrastructure.
+
+The callback signature is:
+
+```cpp C++
+// Called with verbosity_level in the range [-1, 1024].
+// If verbosity_level == 0, TDLib will crash immediately after the callback returns.
+// No TDLib methods may be called from within the callback.
+using LogMessageCallbackPtr = void (*)(int verbosity_level, const char *message);
+```
+
+```c C
+typedef void (*td_log_message_callback_ptr)(int verbosity_level, const char *message);
+```
+
+### Installing the callback
+
+<CodeGroup>
+
+```cpp C++ (ClientManager)
+void my_log_callback(int verbosity_level, const char *message) {
+    // Do not call any TDLib methods here.
+    // If verbosity_level == 0, TDLib will crash after this function returns.
+    fprintf(stderr, "[TDLib:%d] %s", verbosity_level, message);
+}
+
+// Receive all messages up to verbosity level 4 (debug).
+td::ClientManager::set_log_message_callback(4, my_log_callback);
+
+// Remove the callback.
+td::ClientManager::set_log_message_callback(0, nullptr);
+```
+
+```c C (JSON interface)
+void my_log_callback(int verbosity_level, const char *message) {
+    // Do not call any TDLib methods here.
+    fprintf(stderr, "[TDLib:%d] %s", verbosity_level, message);
+}
+
+// Receive messages up to verbosity level 4.
+td_set_log_message_callback(4, my_log_callback);
+
+// Remove the callback.
+td_set_log_message_callback(0, NULL);
+```
+
+</CodeGroup>
+
+The `max_verbosity_level` parameter passed to `set_log_message_callback` / `td_set_log_message_callback` acts as a filter: the callback is only invoked for messages whose verbosity level is less than or equal to `max_verbosity_level`.
+
+<Warning>
+  **Never call any TDLib method from inside the log callback.** The callback is invoked from within TDLib's internal threads, and calling back into TDLib will deadlock or corrupt state.
+</Warning>
+
+## Combining verbosity and the callback
+
+A typical production setup silences verbose output while still capturing fatal errors and warnings:
+
+```cpp C++
+// Only emit errors and warnings to the log file.
+td::ClientManager::execute(
+    td::td_api::make_object<td::td_api::setLogVerbosityLevel>(2)
+);
+
+td::ClientManager::execute(
+    td::td_api::make_object<td::td_api::setLogStream>(
+        td::td_api::make_object<td::td_api::logStreamFile>(
+            "tdlib.log",
+            /*max_file_size=*/ 10 * 1024 * 1024,
+            /*redirect_stderr=*/ false
+        )
+    )
+);
+
+// Additionally capture fatal messages (level 0) in your own handler.
+td::ClientManager::set_log_message_callback(0, [](int level, const char *msg) {
+    // Notify your crash reporter here. TDLib will abort after this returns.
+});
+```
+
+## Deprecated `Log` class
+
+Prior to TDLib 1.4.0, logging was configured through the static `td::Log` class:
+
+```cpp C++ (deprecated since TDLib 1.4.0)
+td::Log::set_verbosity_level(2);
+td::Log::set_file_path("/var/log/tdlib.log");
+td::Log::set_max_file_size(10 * 1024 * 1024);
+td::Log::set_fatal_error_callback([](const char *msg) {
+    // TDLib crashes immediately after this returns.
+});
+```
+
+<Warning>
+  `td::Log` methods are deprecated since TDLib 1.4.0 and will be removed in a future version. Use `setLogVerbosityLevel`, `setLogStream`, and `ClientManager::set_log_message_callback` instead.
+</Warning>
+
+## Further reading
+
+<CardGroup cols={2}>
+  <Card title="JSON interface guide" icon="brackets-curly" href="/guides/json-interface">
+    General usage of `td_execute` and the JSON interface.
+  </Card>
+  <Card title="JSON client API reference" icon="book" href="/api/json-client">
+    Full reference for `td_set_log_message_callback` and other C functions.
+  </Card>
+</CardGroup>

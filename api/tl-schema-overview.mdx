@@ -1,0 +1,99 @@
+---
+title: "TL schema overview"
+description: "How TDLib's TL (Type Language) schema defines all API methods and objects."
+---
+
+TDLib's entire API surface is defined in the `td_api.tl` TL (Type Language) schema file. Every method you can call and every object you can receive is declared there with full documentation.
+
+## What is the TL schema?
+
+The TL schema is a formal type definition file at [`td/generate/scheme/td_api.tl`](https://github.com/tdlib/td/blob/master/td/generate/scheme/td_api.tl). TDLib uses it to auto-generate:
+
+- C++ header files (`td_api.h`, `td_api.hpp`)
+- Java bindings (`TdApi.java`)
+- .NET bindings
+- JSON serialization/deserialization code
+- HTML documentation
+
+## Schema syntax
+
+Each line defines either a **type** (data object) or a **function** (callable method):
+
+```
+// Type definition
+error code:int32 message:string = Error;
+
+// Function definition
+getMe = User;
+sendMessage chat_id:int53 ... = Message;
+```
+
+- Everything before `=` is the constructor name and fields
+- Everything after `=` is the return type
+- Field annotations use `//@ ` comments
+
+## Browsing the API
+
+You have several options for exploring all available methods and types:
+
+<CardGroup cols={2}>
+  <Card title="HTML documentation" icon="globe" href="https://core.telegram.org/tdlib/docs/td__api_8h.html">
+    Automatically generated HTML docs for every method and class.
+  </Card>
+  <Card title="TL schema source" icon="file-code" href="https://github.com/tdlib/td/blob/master/td/generate/scheme/td_api.tl">
+    The raw TL schema with inline documentation comments.
+  </Card>
+  <Card title="All functions" icon="list" href="https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1_function.html">
+    Browse every callable TDLib method.
+  </Card>
+  <Card title="All classes" icon="cubes" href="https://core.telegram.org/tdlib/docs/classtd_1_1td__api_1_1_object.html">
+    Browse every TDLib object type.
+  </Card>
+</CardGroup>
+
+## Object categories
+
+TDLib objects fall into a few major categories:
+
+| Category | Description | Example types |
+|----------|-------------|---------------|
+| **Functions** | Methods you call | `sendMessage`, `getChats`, `getMe` |
+| **Updates** | Events TDLib pushes to you | `updateNewMessage`, `updateChatLastMessage` |
+| **Errors** | Failure responses | `error` |
+| **Data objects** | Structured data | `message`, `chat`, `user`, `file` |
+| **Input objects** | Parameters for functions | `inputMessageText`, `inputFile` |
+
+## Common base types
+
+<AccordionGroup>
+  <Accordion title="error">
+    Returned on any failed function call.
+    ```json
+    { "@type": "error", "code": 400, "message": "Bad Request: chat not found" }
+    ```
+    - `code` — integer error code
+    - `message` — human-readable description. **Never display `message` to users when `code` is 406.**
+  </Accordion>
+  <Accordion title="ok">
+    Returned by functions that succeed but return no meaningful data.
+    ```json
+    { "@type": "ok" }
+    ```
+  </Accordion>
+  <Accordion title="update">
+    All update types start with `update`. They are delivered with `request_id == 0` (or `@extra` absent).
+    Examples: `updateAuthorizationState`, `updateNewMessage`, `updateConnectionState`.
+  </Accordion>
+</AccordionGroup>
+
+## Type naming conventions
+
+- **camelCase** for type names: `inputMessageText`, `chatTypeBasicGroup`
+- **snake_case** for field names: `chat_id`, `message_id`, `input_message_content`
+- Types that begin with `input` are parameters you provide to functions
+- Types that begin with `update` are pushed to you by TDLib
+- Abstract base types (classes) appear in the schema as `@class` annotations
+
+## Using the schema for code generation
+
+Many community libraries generate typed bindings from `td_api.tl`. If you are building a new binding for a language, you can parse the TL schema to auto-generate strongly-typed wrappers — many existing libraries do exactly this.

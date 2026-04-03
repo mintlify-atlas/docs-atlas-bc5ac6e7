@@ -1,0 +1,182 @@
+---
+title: "User methods"
+description: "TDLib API methods for fetching and managing user information."
+---
+
+## `getMe`
+
+Returns the current authenticated user.
+
+**Returns:** `user`
+
+```json
+{ "@type": "getMe" }
+```
+
+---
+
+## `getUser`
+
+Returns basic information about a user.
+
+<ParamField path="user_id" type="int53" required>
+  The user ID.
+</ParamField>
+
+**Returns:** `user`
+
+---
+
+## `getUserFullInfo`
+
+Returns full information about a user, including bio, personal chat, and linked channel.
+
+<ParamField path="user_id" type="int53" required>
+  The user ID.
+</ParamField>
+
+**Returns:** `userFullInfo`
+
+---
+
+## `searchUserByPhoneNumber`
+
+Searches for a user by phone number.
+
+<ParamField path="phone_number" type="string" required>
+  Phone number in international format.
+</ParamField>
+
+**Returns:** `user`
+
+---
+
+## `searchUserByToken`
+
+Searches for a user by a token from their invite link.
+
+<ParamField path="token" type="string" required>
+  Token from a `tg://contact?token=...` link.
+</ParamField>
+
+**Returns:** `user`
+
+---
+
+## `getContacts`
+
+Returns IDs of all contacts for the current user.
+
+**Returns:** `users` — object with a `user_ids` array.
+
+---
+
+## `importContacts`
+
+Imports contacts from a list of phone number / name pairs. Returns matched Telegram users.
+
+<ParamField path="contacts" type="vector<contact>" required>
+  List of contacts. Each has `phone_number`, `first_name`, `last_name`, `user_id` (optional).
+</ParamField>
+
+**Returns:** `importedContacts`
+
+---
+
+## `removeContacts`
+
+Removes users from the contact list.
+
+<ParamField path="user_ids" type="vector<int53>" required>
+  IDs of users to remove from contacts.
+</ParamField>
+
+**Returns:** `ok`
+
+---
+
+## `blockMessageSenderFromReplies`
+
+Blocks a message sender in the Replies chat.
+
+<ParamField path="message_id" type="int53" required>
+  The message ID in the Replies chat.
+</ParamField>
+<ParamField path="delete_message" type="bool">
+  Also delete the message.
+</ParamField>
+<ParamField path="delete_all_messages" type="bool">
+  Delete all messages from this sender.
+</ParamField>
+<ParamField path="report_spam" type="bool">
+  Also report the sender as spam.
+</ParamField>
+
+**Returns:** `ok`
+
+---
+
+## `toggleMessageSenderIsBlocked`
+
+Blocks or unblocks a message sender.
+
+<ParamField path="sender_id" type="MessageSender" required>
+  The sender to block/unblock.
+</ParamField>
+<ParamField path="is_blocked" type="bool" required>
+  `true` to block, `false` to unblock.
+</ParamField>
+
+**Returns:** `ok`
+
+---
+
+## `setUserPersonalProfilePhoto`
+
+Sets or clears the profile photo for a contact (visible only to you).
+
+<ParamField path="user_id" type="int53" required>The user ID.</ParamField>
+<ParamField path="photo" type="InputChatPhoto">New personal photo. Pass null to remove.</ParamField>
+
+**Returns:** `ok`
+
+---
+
+## User object fields
+
+<ResponseField name="id" type="int53">
+  Unique user identifier.
+</ResponseField>
+<ResponseField name="first_name" type="string">
+  User's first name.
+</ResponseField>
+<ResponseField name="last_name" type="string">
+  User's last name.
+</ResponseField>
+<ResponseField name="usernames" type="usernames">
+  Active and disabled usernames.
+</ResponseField>
+<ResponseField name="phone_number" type="string">
+  Phone number (only available for contacts or the current user).
+</ResponseField>
+<ResponseField name="status" type="UserStatus">
+  Online status: `userStatusOnline`, `userStatusOffline`, `userStatusRecently`, etc.
+</ResponseField>
+<ResponseField name="profile_photo" type="profilePhoto">
+  Profile photo thumbnail and full-size file references.
+</ResponseField>
+<ResponseField name="is_contact" type="bool">
+  Whether this user is in the current user's contacts.
+</ResponseField>
+<ResponseField name="is_mutual_contact" type="bool">
+  Whether the user has the current user in their contacts.
+</ResponseField>
+<ResponseField name="is_verified" type="bool">
+  Whether this is a verified account.
+</ResponseField>
+<ResponseField name="is_bot" type="bool">
+  Whether this is a bot account.
+</ResponseField>
+<ResponseField name="type" type="UserType">
+  `userTypeRegular`, `userTypeBot`, `userTypeDeleted`, or `userTypeUnknown`.
+</ResponseField>

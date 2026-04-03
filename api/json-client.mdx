@@ -1,0 +1,154 @@
+---
+title: "JSON client API"
+description: "Reference for the TDLib C JSON interface — td_create_client_id, td_send, td_receive, and td_execute."
+---
+
+The JSON client API is TDLib's universal C interface. It accepts and returns JSON-serialized strings, making it usable from any language that can call C functions via FFI or ctypes.
+
+## Functions
+
+### `td_create_client_id`
+
+```c
+int td_create_client_id();
+```
+
+Creates a new TDLib instance and returns its opaque integer client ID. The instance will not send updates until the first request is sent to it.
+
+**Returns:** An integer client ID. Pass this to `td_send` and receive updates with `td_receive`.
+
+---
+
+### `td_send`
+
+```c
+void td_send(int client_id, const char *request);
+```
+
+Sends a JSON-serialized request to a TDLib client asynchronously. May be called from any thread.
+
+<ParamField path="client_id" type="int" required>
+  The client ID returned by `td_create_client_id`.
+</ParamField>
+<ParamField path="request" type="const char *" required>
+  A null-terminated, JSON-serialized request string. The `@type` field identifies the method. Add `@extra` to match responses to requests.
+</ParamField>
+
+**Example:**
+
+```c
+td_send(client_id, "{\"@type\":\"getMe\",\"@extra\":\"req-1\"}");
+```
+
+---
+
+### `td_receive`
+
+```c
+const char *td_receive(double timeout);
+```
+
+Receives the next incoming update or request response. Must **not** be called simultaneously from two different threads.
+
+<ParamField path="timeout" type="double" required>
+  Maximum seconds to wait for data. Use `1.0`–`10.0` in a typical event loop.
+</ParamField>
+
+**Returns:** A JSON string, or `NULL` if the timeout expires. The pointer is valid until the next call to `td_receive` or `td_execute`.
+
+The returned object has:
+- `@client_id` — the client that produced this response
+- `@extra` — echoed from the request (if set)
+- `@type` — the object or update type
+
+If `@type` starts with `update`, it is an incoming update (not a response to a request).
+
+---
+
+### `td_execute`
+
+```c
+const char *td_execute(const char *request);
+```
+
+Executes a TDLib request **synchronously**. Only requests documented with "Can be called synchronously" are supported here (e.g., `setLogVerbosityLevel`, `setLogStream`, `getTextEntities`, `getOption`).
+
+<ParamField path="request" type="const char *" required>
+  A null-terminated, JSON-serialized request string.
+</ParamField>
+
+**Returns:** A JSON response string. Valid until the next call to `td_receive` or `td_execute`.
+
+---
+
+### `td_set_log_message_callback`
+
+```c
+void td_set_log_message_callback(int max_verbosity_level, td_log_message_callback_ptr callback);
+```
+
+Sets a callback for TDLib log messages. Pass `NULL` to remove the callback.
+
+<Warning>
+Do not call any TDLib methods from inside the callback. If `verbosity_level == 0`, TDLib will crash immediately after the callback returns.
+</Warning>
+
+---
+
+## JSON object format
+
+All TDLib API objects serialize to JSON with the same field names as the TL schema. The `@type` field holds the type name.
+
+```json
+{
+  "@type": "sendMessage",
+  "@extra": "my-request-id",
+  "chat_id": 123456789,
+  "input_message_content": {
+    "@type": "inputMessageText",
+    "text": {
+      "@type": "formattedText",
+      "text": "Hello, world!"
+    }
+  }
+}
+```
+
+**Field type mapping:**
+
+| TL type | JSON type |
+|---------|-----------|
+| `Bool` | Boolean |
+| `int32`, `int53`, `double` | Number |
+| `int64`, `string` | String |
+| `bytes` | Base64-encoded String |
+| `vector` | Array |
+
+## General usage pattern
+
+```python
+import json, ctypes
+
+tdjson = ctypes.CDLL("libtdjson.so")
+tdjson.td_create_client_id.restype = ctypes.c_int
+tdjson.td_send.argtypes = [ctypes.c_int, ctypes.c_char_p]
+tdjson.td_receive.restype = ctypes.c_char_p
+tdjson.td_receive.argtypes = [ctypes.c_double]
+tdjson.td_execute.restype = ctypes.c_char_p
+tdjson.td_execute.argtypes = [ctypes.c_char_p]
+
+client_id = tdjson.td_create_client_id()
+
+# Trigger first update
+tdjson.td_send(client_id, json.dumps({"@type": "getOption", "name": "version"}).encode())
+
+while True:
+    result = tdjson.td_receive(1.0)
+    if result:
+        update = json.loads(result.decode())
+        # process update...
+```
+
+## Deprecated old JSON interface
+
+TDLib also has an older JSON interface (`td_json_client_create`, `td_json_client_send`, `td_json_client_receive`, `td_json_client_destroy`) that will be removed in TDLib 2.0.0. Use the functions above for all new code.

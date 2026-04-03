@@ -1,0 +1,188 @@
+---
+title: "Encryption and storage"
+description: "How TDLib encrypts local data and manages the database."
+---
+
+TDLib stores all local data — messages, chats, users, media — in an encrypted on-disk database. You control the location, the encryption key, and which features are persisted. Configuring storage correctly is part of the first step of the [authorization flow](/concepts/authorization).
+
+## Configuring storage in setTdlibParameters
+
+All storage options are set in a single `setTdlibParameters` call, sent when TDLib reaches `authorizationStateWaitTdlibParameters`:
+
+```python tdjson_example.py
+self.send(
+    {
+        "@type": "setTdlibParameters",
+        "database_directory": "tdlib_data",
+        "use_message_database": True,
+        "use_secret_chats": True,
+        "api_id": self.api_id,
+        "api_hash": self.api_hash,
+        "system_language_code": "en",
+        "device_model": "Python TDLib Client",
+        "application_version": "1.1",
+    }
+)
+```
+
+The storage-related parameters are described below.
+
+## Database directory
+
+The `database_directory` parameter sets the path where TDLib stores its SQLite databases and other persistent files. You can use an absolute path or a path relative to the current working directory.
+
+```python storage_paths.py
+{
+    "@type": "setTdlibParameters",
+    "database_directory": "/var/lib/myapp/tdlib",  # absolute path
+    "files_directory": "/var/lib/myapp/downloads",
+    # ...
+}
+```
+
+<Tip>
+  Use a dedicated directory per user account if your application manages multiple TDLib clients. Each client must have its own `database_directory` to avoid conflicts.
+</Tip>
+
+Each database directory contains:
+
+<Tree>
+  <Tree.Folder name="tdlib_data" defaultOpen>
+    <Tree.File name="db.sqlite" />
+    <Tree.File name="db.sqlite-shm" />
+    <Tree.File name="db.sqlite-wal" />
+    <Tree.Folder name="files" defaultOpen>
+      <Tree.File name="photos/..." />
+      <Tree.File name="documents/..." />
+      <Tree.File name="voice/..." />
+    </Tree.Folder>
+  </Tree.Folder>
+</Tree>
+
+## Encryption key
+
+TDLib encrypts the local database with a key you supply. Set it through the `database_encryption_key` field:
+
+```python encryption_key.py
+{
+    "@type": "setTdlibParameters",
+    "database_directory": "tdlib_data",
+    "database_encryption_key": "your-secret-key",
+    # ...
+}
+```
+
+<Warning>
+  If you lose the encryption key, you cannot recover the local database. Store the key securely — for example, in the OS keychain or a secrets manager — and never hard-code it in source code.
+</Warning>
+
+Key points about the encryption key:
+
+- All data in `database_directory` is encrypted at rest using this key.
+- An empty string (`""`) disables encryption. This is acceptable during development but not recommended for production.
+- If the key changes between runs, TDLib will fail to open the existing database. You must either use the same key or delete the database directory and start fresh.
+- The key is not stored anywhere by TDLib — you are responsible for providing it on every startup.
+
+## Message database
+
+The `use_message_database` option controls whether TDLib persists the full message history locally.
+
+<Tabs>
+  <Tab title="Enabled (recommended)">
+    ```python
+    "use_message_database": True
+    ```
+
+    - Message history is stored on disk and survives restarts.
+    - `getMessage`, `getChatHistory`, and search queries work without a network round-trip for cached data.
+    - The local database grows over time; TDLib manages cache eviction automatically.
+  </Tab>
+  <Tab title="Disabled">
+    ```python
+    "use_message_database": False
+    ```
+
+    - No message history is saved to disk.
+    - Every request for messages requires a network call.
+    - Useful for bots or stateless applications that do not need a local cache.
+  </Tab>
+</Tabs>
+
+## Files directory
+
+Downloaded files (photos, documents, voice messages, videos) are stored in `files_directory`. If omitted, TDLib uses a `files` subdirectory inside `database_directory`.
+
+```python files_directory.py
+{
+    "@type": "setTdlibParameters",
+    "database_directory": "/var/lib/myapp/tdlib",
+    "files_directory": "/var/lib/myapp/media",
+    # ...
+}
+```
+
+Files you download via `downloadFile` are placed here. The path for a specific file is available in `localFile.path` on the `file` object after the download completes.
+
+## Secret chats (end-to-end encryption)
+
+The `use_secret_chats` parameter enables support for Telegram's end-to-end encrypted secret chats.
+
+```python secret_chats.py
+{
+    "@type": "setTdlibParameters",
+    "use_secret_chats": True,
+    # ...
+}
+```
+
+When enabled:
+
+- TDLib stores secret chat keys locally in `database_directory`.
+- Secret chat messages are not stored on Telegram's servers — they exist only on the devices involved.
+- Disabling this option after it has been enabled will cause existing secret chats to stop working.
+
+<Note>
+  Secret chat keys are tied to a specific device and database. If you delete `database_directory`, all secret chats for that client are permanently lost, even if you use the same account again.
+</Note>
+
+## Data persistence across restarts
+
+TDLib's local database means your application does not need to re-download all state on every start. On the next launch with the same `database_directory` and `database_encryption_key`:
+
+- The authorization state is restored — the user does not need to log in again.
+- Cached chats, users, and messages are available immediately, before any network requests complete.
+- TDLib sends a burst of `update*` objects on startup to synchronize local state with the server.
+
+## Cleanup on close
+
+When you close TDLib (e.g., by calling `close`), it transitions through:
+
+1. `authorizationStateLoggingOut` (if you called `logOut`)
+2. `authorizationStateClosing` — TDLib is flushing and closing databases
+3. `authorizationStateClosed` — all resources are freed; the database is safely closed
+
+Wait for `authorizationStateClosed` before deleting or modifying files in `database_directory`. Terminating the process before this point can corrupt the database.
+
+```python clean_shutdown.py
+def shutdown(client) -> None:
+    client.send({"@type": "close"})
+
+    while True:
+        event = client.receive(timeout=5.0)
+        if event and event["@type"] == "updateAuthorizationState":
+            state = event["authorization_state"]["@type"]
+            if state == "authorizationStateClosed":
+                print("TDLib closed cleanly.")
+                break
+```
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Authorization" icon="key" href="/concepts/authorization">
+    See how setTdlibParameters fits into the full authentication flow.
+  </Card>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    A complete working example including storage configuration.
+  </Card>
+</CardGroup>

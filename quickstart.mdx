@@ -1,80 +1,392 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: "Quick start"
+description: "Get a working TDLib client running using the JSON interface from Python."
 ---
 
-## Get started in three steps
+This guide walks you through running a TDLib client in Python using the JSON/C interface. By the end you will have a client that authenticates and receives live updates from Telegram.
 
-Get your documentation site running locally and make your first customization.
+<Note>
+  You need a compiled `tdjson` shared library before you can run this code. If you have not built TDLib yet, see [Building TDLib](/building) first.
+</Note>
 
-### Step 1: Set up your local environment
+## Prerequisites
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+- Python 3.7 or later
+- A compiled `tdjson` shared library (`libtdjson.so` on Linux, `libtdjson.dylib` on macOS, `tdjson.dll` on Windows)
+- Telegram API credentials (`api_id` and `api_hash`)
 
-### Step 2: Deploy your changes
+## Steps
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+<Steps>
+  <Step title="Get your API credentials">
+    Every Telegram client requires an `api_id` and `api_hash` registered to your application.
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+    1. Go to [https://my.telegram.org](https://my.telegram.org) and sign in with your phone number.
+    2. Navigate to **API development tools**.
+    3. Create a new application and copy the `api_id` (an integer) and `api_hash` (a hex string).
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+    <Warning>
+      Never share your `api_id` or `api_hash` publicly. Do not commit them to version control. The example values in the TDLib source code are for demonstration only.
+    </Warning>
+  </Step>
 
-### Step 3: Go live
+  <Step title="Build TDLib">
+    Follow the [Building TDLib](/building) guide to compile the `tdjson` shared library for your platform. Once built, make sure the library is on your system's library path or place `tdjson.dll` next to your script on Windows.
+  </Step>
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+  <Step title="Load the library with ctypes">
+    Use Python's `ctypes` module to load `tdjson` and set up function signatures for the four core C functions:
+
+    ```python load_library.py
+    import json
+    import os
+    import sys
+    from ctypes import CDLL, CFUNCTYPE, c_char_p, c_double, c_int
+    from ctypes.util import find_library
+
+    # Locate and load the shared library
+    tdjson_path = find_library("tdjson")
+    if tdjson_path is None:
+        if os.name == "nt":
+            tdjson_path = os.path.join(os.path.dirname(__file__), "tdjson.dll")
+        else:
+            sys.exit("Error: Can't find 'tdjson' library. Make sure it's installed correctly.")
+
+    tdjson = CDLL(tdjson_path)
+
+    # td_create_client_id() -> int
+    _td_create_client_id = tdjson.td_create_client_id
+    _td_create_client_id.restype = c_int
+    _td_create_client_id.argtypes = []
+
+    # td_receive(timeout: double) -> char*
+    _td_receive = tdjson.td_receive
+    _td_receive.restype = c_char_p
+    _td_receive.argtypes = [c_double]
+
+    # td_send(client_id: int, request: char*) -> None
+    _td_send = tdjson.td_send
+    _td_send.restype = None
+    _td_send.argtypes = [c_int, c_char_p]
+
+    # td_execute(request: char*) -> char*
+    _td_execute = tdjson.td_execute
+    _td_execute.restype = c_char_p
+    _td_execute.argtypes = [c_char_p]
+    ```
+
+    <Tip>
+      `td_receive` and `td_execute` return a pointer that is valid only until the next call to either function. Decode the bytes immediately.
+    </Tip>
+  </Step>
+
+  <Step title="Create a client and configure logging">
+    Create a client ID and set the log verbosity level. The log callback is set up so that fatal errors terminate the process:
+
+    ```python create_client.py
+    from ctypes import CFUNCTYPE, c_int, c_char_p
+
+    # Set up a log callback to catch fatal errors
+    log_message_callback_type = CFUNCTYPE(None, c_int, c_char_p)
+    _td_set_log_message_callback = tdjson.td_set_log_message_callback
+    _td_set_log_message_callback.restype = None
+    _td_set_log_message_callback.argtypes = [c_int, log_message_callback_type]
+
+    @log_message_callback_type
+    def on_log_message_callback(verbosity_level, message):
+        if verbosity_level == 0:
+            sys.exit(f"TDLib fatal error: {message.decode('utf-8')}")
+
+    _td_set_log_message_callback(2, on_log_message_callback)
+
+    # Set log verbosity: 0=fatal, 1=errors, 2=warnings, 3+=debug
+    def execute(query):
+        query_json = json.dumps(query).encode("utf-8")
+        result = _td_execute(query_json)
+        if result:
+            return json.loads(result.decode("utf-8"))
+        return None
+
+    execute({"@type": "setLogVerbosityLevel", "new_verbosity_level": 1})
+
+    # Create a new client instance
+    client_id = _td_create_client_id()
+    ```
+  </Step>
+
+  <Step title="Authenticate">
+    TDLib authentication is driven by `updateAuthorizationState` events. Send an initial request to activate the client, then respond to each authorization state as it arrives:
+
+    ```python authenticate.py
+    def send(query):
+        query_json = json.dumps(query).encode("utf-8")
+        _td_send(client_id, query_json)
+
+    def receive(timeout=1.0):
+        result = _td_receive(timeout)
+        if result:
+            return json.loads(result.decode("utf-8"))
+        return None
+
+    # Activate the client with an initial request
+    send({"@type": "getOption", "name": "version"})
+
+    # Authentication event loop
+    while True:
+        event = receive()
+        if not event:
+            continue
+
+        if event["@type"] == "updateAuthorizationState":
+            auth_type = event["authorization_state"]["@type"]
+
+            if auth_type == "authorizationStateWaitTdlibParameters":
+                send({
+                    "@type": "setTdlibParameters",
+                    "database_directory": "tdlib_data",
+                    "use_message_database": True,
+                    "use_secret_chats": True,
+                    "api_id": YOUR_API_ID,        # replace with your api_id
+                    "api_hash": "YOUR_API_HASH",  # replace with your api_hash
+                    "system_language_code": "en",
+                    "device_model": "Python TDLib Client",
+                    "application_version": "1.0",
+                })
+
+            elif auth_type == "authorizationStateWaitPhoneNumber":
+                phone_number = input("Enter your phone number (international format): ")
+                send({
+                    "@type": "setAuthenticationPhoneNumber",
+                    "phone_number": phone_number,
+                })
+
+            elif auth_type == "authorizationStateWaitCode":
+                code = input("Enter the authentication code you received: ")
+                send({"@type": "checkAuthenticationCode", "code": code})
+
+            elif auth_type == "authorizationStateWaitPassword":
+                password = input("Enter your password: ")
+                send({"@type": "checkAuthenticationPassword", "password": password})
+
+            elif auth_type == "authorizationStateWaitEmailAddress":
+                email = input("Enter your email address: ")
+                send({"@type": "setAuthenticationEmailAddress", "email_address": email})
+
+            elif auth_type == "authorizationStateWaitEmailCode":
+                code = input("Enter the email authentication code: ")
+                send({
+                    "@type": "checkAuthenticationEmailCode",
+                    "code": {
+                        "@type": "emailAddressAuthenticationCode",
+                        "code": code,
+                    },
+                })
+
+            elif auth_type == "authorizationStateWaitRegistration":
+                first_name = input("Enter your first name: ")
+                last_name = input("Enter your last name: ")
+                send({
+                    "@type": "registerUser",
+                    "first_name": first_name,
+                    "last_name": last_name,
+                })
+
+            elif auth_type == "authorizationStateReady":
+                print("Authorization complete. You are now logged in.")
+                break
+
+            elif auth_type == "authorizationStateClosed":
+                print("Authorization state closed.")
+                break
+    ```
+
+    For a full description of all authorization states and transitions, see [Authorization](/concepts/authorization).
+  </Step>
+
+  <Step title="Run the event loop">
+    Once authenticated, enter a loop to receive and process updates:
+
+    ```python event_loop.py
+    print("Entering event loop. Press Ctrl+C to exit.")
+    try:
+        while True:
+            event = receive()
+            if event:
+                print(json.dumps(event, indent=2))
+    except KeyboardInterrupt:
+        print("Exiting...")
+    ```
+
+    Every incoming message, chat update, or user change arrives here as a JSON object with a `@type` field identifying the update type.
+  </Step>
+</Steps>
+
+## Complete example
+
+The full working example from the TDLib repository wraps all of the above into a class:
+
+```python tdjson_example.py
+#!/usr/bin/env python3
+import json
+import os
+import sys
+from ctypes import CDLL, CFUNCTYPE, c_char_p, c_double, c_int
+from ctypes.util import find_library
+from typing import Any, Dict, Optional
+
+
+class TdExample:
+    """A Python client for the Telegram API using TDLib."""
+
+    def __init__(self, api_id: int = None, api_hash: str = None):
+        self.api_id = api_id
+        self.api_hash = api_hash
+        self._load_library()
+        self._setup_functions()
+        self._setup_logging()
+        self.client_id = self._td_create_client_id()
+
+    def _load_library(self) -> None:
+        tdjson_path = find_library("tdjson")
+        if tdjson_path is None:
+            if os.name == "nt":
+                tdjson_path = os.path.join(os.path.dirname(__file__), "tdjson.dll")
+            else:
+                sys.exit("Error: Can't find 'tdjson' library. Make sure it's installed correctly.")
+        try:
+            self.tdjson = CDLL(tdjson_path)
+        except Exception as e:
+            sys.exit(f"Error loading TDLib: {e}")
+
+    def _setup_functions(self) -> None:
+        self._td_create_client_id = self.tdjson.td_create_client_id
+        self._td_create_client_id.restype = c_int
+        self._td_create_client_id.argtypes = []
+
+        self._td_receive = self.tdjson.td_receive
+        self._td_receive.restype = c_char_p
+        self._td_receive.argtypes = [c_double]
+
+        self._td_send = self.tdjson.td_send
+        self._td_send.restype = None
+        self._td_send.argtypes = [c_int, c_char_p]
+
+        self._td_execute = self.tdjson.td_execute
+        self._td_execute.restype = c_char_p
+        self._td_execute.argtypes = [c_char_p]
+
+        self.log_message_callback_type = CFUNCTYPE(None, c_int, c_char_p)
+        self._td_set_log_message_callback = self.tdjson.td_set_log_message_callback
+        self._td_set_log_message_callback.restype = None
+        self._td_set_log_message_callback.argtypes = [c_int, self.log_message_callback_type]
+
+    def _setup_logging(self, verbosity_level: int = 1) -> None:
+        @self.log_message_callback_type
+        def on_log_message_callback(verbosity_level, message):
+            if verbosity_level == 0:
+                sys.exit(f"TDLib fatal error: {message.decode('utf-8')}")
+
+        self._td_set_log_message_callback(2, on_log_message_callback)
+        self.execute({"@type": "setLogVerbosityLevel", "new_verbosity_level": verbosity_level})
+
+    def execute(self, query: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        query_json = json.dumps(query).encode("utf-8")
+        result = self._td_execute(query_json)
+        if result:
+            return json.loads(result.decode("utf-8"))
+        return None
+
+    def send(self, query: Dict[str, Any]) -> None:
+        query_json = json.dumps(query).encode("utf-8")
+        self._td_send(self.client_id, query_json)
+
+    def receive(self, timeout: float = 1.0) -> Optional[Dict[str, Any]]:
+        result = self._td_receive(timeout)
+        if result:
+            return json.loads(result.decode("utf-8"))
+        return None
+
+    def login(self) -> None:
+        self.send({"@type": "getOption", "name": "version"})
+        try:
+            self._handle_authentication()
+        except KeyboardInterrupt:
+            print("\nAuthentication canceled by user.")
+            sys.exit(0)
+
+    def _handle_authentication(self) -> None:
+        while True:
+            event = self.receive()
+            if not event:
+                continue
+
+            if event["@type"] == "updateAuthorizationState":
+                auth_state = event["authorization_state"]
+                auth_type = auth_state["@type"]
+
+                if auth_type == "authorizationStateClosed":
+                    break
+
+                elif auth_type == "authorizationStateWaitTdlibParameters":
+                    if not self.api_id or not self.api_hash:
+                        self.api_id = int(input("Please enter your API ID: "))
+                        self.api_hash = input("Please enter your API hash: ")
+                    self.send({
+                        "@type": "setTdlibParameters",
+                        "database_directory": "tdlib_data",
+                        "use_message_database": True,
+                        "use_secret_chats": True,
+                        "api_id": self.api_id,
+                        "api_hash": self.api_hash,
+                        "system_language_code": "en",
+                        "device_model": "Python TDLib Client",
+                        "application_version": "1.1",
+                    })
+
+                elif auth_type == "authorizationStateWaitPhoneNumber":
+                    phone_number = input("Please enter your phone number (international format): ")
+                    self.send({"@type": "setAuthenticationPhoneNumber", "phone_number": phone_number})
+
+                elif auth_type == "authorizationStateWaitCode":
+                    code = input("Please enter the authentication code you received: ")
+                    self.send({"@type": "checkAuthenticationCode", "code": code})
+
+                elif auth_type == "authorizationStateWaitPassword":
+                    password = input("Please enter your password: ")
+                    self.send({"@type": "checkAuthenticationPassword", "password": password})
+
+                elif auth_type == "authorizationStateReady":
+                    print("Authorization complete! You are now logged in.")
+                    return
+
+
+if __name__ == "__main__":
+    client = TdExample()
+    client.login()
+
+    print("Entering main event loop. Press Ctrl+C to exit.")
+    try:
+        while True:
+            event = client.receive()
+            if event:
+                print(json.dumps(event, indent=2))
+    except KeyboardInterrupt:
+        print("\nExiting...")
+```
 
 ## Next steps
 
-Now that you have your docs running, explore these key features:
-
 <CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
+  <Card title="JSON interface guide" icon="brackets-curly" href="/guides/json-interface">
+    Deep dive into the JSON/C interface: serialization format, the `@extra` field, and managing multiple clients.
+  </Card>
+  <Card title="Authorization" icon="lock" href="/concepts/authorization">
+    Understand all authorization states and how to handle edge cases like two-factor authentication.
+  </Card>
+  <Card title="JSON client API reference" icon="book" href="/api/json-client">
+    Full reference for `td_create_client_id`, `td_send`, `td_receive`, and `td_execute`.
+  </Card>
+  <Card title="Building TDLib" icon="hammer" href="/building">
+    Compile TDLib from source for Linux, macOS, Windows, or mobile platforms.
+  </Card>
 </CardGroup>
-
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>

@@ -1,0 +1,167 @@
+---
+title: "ClientManager"
+description: "The primary C++ interface for managing multiple TDLib client instances."
+---
+
+`td::ClientManager` is the recommended C++ interface for interacting with TDLib. It manages multiple TDLib client instances and lets you send and receive from any thread.
+
+## Include
+
+```cpp
+#include "td/telegram/Client.h"
+```
+
+## Class reference
+
+### Constructor
+
+```cpp
+ClientManager();
+```
+
+Creates a new TDLib client manager.
+
+---
+
+### `create_client_id`
+
+```cpp
+ClientId create_client_id();
+```
+
+Returns an opaque identifier for a new TDLib instance. The instance will not send updates until the first request is sent to it.
+
+**Returns:** `ClientId` (`int32_t`) — pass this to `send()` and check it on responses.
+
+---
+
+### `send`
+
+```cpp
+void send(ClientId client_id, RequestId request_id, td_api::object_ptr<td_api::Function> &&request);
+```
+
+Sends a request to a TDLib client. May be called from any thread.
+
+<ParamField path="client_id" type="ClientId" required>
+  The client identifier from `create_client_id()`.
+</ParamField>
+<ParamField path="request_id" type="RequestId" required>
+  A non-zero `uint64_t` identifier. Responses carry the same `request_id`. Updates always have `request_id == 0`, so incoming requests must not use 0.
+</ParamField>
+<ParamField path="request" type="td_api::object_ptr<td_api::Function>" required>
+  The API function to call, created with `td_api::make_object<>`.
+</ParamField>
+
+---
+
+### `receive`
+
+```cpp
+Response receive(double timeout);
+```
+
+Receives the next incoming update or request response. Must **not** be called simultaneously from two different threads.
+
+<ParamField path="timeout" type="double" required>
+  Maximum seconds to wait. Returns immediately if data is available.
+</ParamField>
+
+**Returns:** A `Response` struct. If `response.object == nullptr`, the timeout expired with no data.
+
+#### Response struct
+
+<ResponseField name="client_id" type="ClientId">
+  The TDLib client that produced this response.
+</ResponseField>
+<ResponseField name="request_id" type="RequestId">
+  The request identifier. `0` means this is an incoming update, not a response.
+</ResponseField>
+<ResponseField name="object" type="td_api::object_ptr<td_api::Object>">
+  The API object. Cast to the expected type or dispatch on `get_id()`.
+</ResponseField>
+
+---
+
+### `execute` (static)
+
+```cpp
+static td_api::object_ptr<td_api::Object> execute(td_api::object_ptr<td_api::Function> &&request);
+```
+
+Executes a request synchronously. Only requests documented with "Can be called synchronously" are supported.
+
+---
+
+### `set_log_message_callback` (static)
+
+```cpp
+static void set_log_message_callback(int max_verbosity_level, LogMessageCallbackPtr callback);
+```
+
+Sets a callback for TDLib log messages. Pass `nullptr` to remove the callback.
+
+<Warning>
+Do not call any TDLib methods from within the callback. If `verbosity_level == 0`, TDLib will crash immediately after the callback returns.
+</Warning>
+
+---
+
+### `get_manager_singleton` (static)
+
+```cpp
+static ClientManager *get_manager_singleton();
+```
+
+Returns a pointer to a global singleton `ClientManager`. Useful when you only need one manager for your entire application.
+
+---
+
+## Usage pattern
+
+```cpp
+#include "td/telegram/Client.h"
+#include "td/telegram/td_api.h"
+
+namespace td_api = td::td_api;
+
+td::ClientManager manager;
+auto client_id = manager.create_client_id();
+
+// Send a dummy request to activate the client
+manager.send(client_id, 1, td_api::make_object<td_api::getOption>("version"));
+
+const double WAIT_TIMEOUT = 10.0;
+while (true) {
+    auto response = manager.receive(WAIT_TIMEOUT);
+    if (response.object == nullptr) {
+        continue;
+    }
+
+    if (response.request_id == 0) {
+        // Incoming update — process as td_api::Update subtype
+        auto &update = *response.object;
+        if (update.get_id() == td_api::updateAuthorizationState::ID) {
+            // handle auth state
+        }
+    } else {
+        // Response to a previously sent request
+    }
+}
+```
+
+## Multiple clients
+
+`ClientManager` can manage many TDLib instances simultaneously. Each `create_client_id()` call creates an independent instance with its own state, storage, and connection.
+
+```cpp
+auto client1 = manager.create_client_id();
+auto client2 = manager.create_client_id();
+
+// Send to specific clients
+manager.send(client1, 1, td_api::make_object<td_api::getMe>());
+manager.send(client2, 2, td_api::make_object<td_api::getMe>());
+
+// Receive handles all clients — check response.client_id
+auto response = manager.receive(1.0);
+```

@@ -1,0 +1,216 @@
+---
+title: "Updates"
+description: "How TDLib delivers real-time updates and how to process them correctly."
+---
+
+TDLib pushes all real-time events — new messages, state changes, connection status — as **updates**. Understanding how to receive and process updates correctly is fundamental to building a reliable TDLib application.
+
+## What are updates?
+
+Updates are JSON objects (or C++ objects in the native API) whose `@type` field starts with `"update"`. They are not responses to any request you made; TDLib emits them spontaneously as things happen.
+
+```json example update
+{
+  "@type": "updateNewMessage",
+  "message": {
+    "id": 123456789,
+    "chat_id": -1001234567890,
+    "date": 1712000000,
+    "content": {
+      "@type": "messageText",
+      "text": { "@type": "formattedText", "text": "Hello!" }
+    }
+  }
+}
+```
+
+## Identifying updates vs. responses
+
+Every object returned by `td_receive` (or `ClientManager::receive` in C++) is either an update or a response to one of your requests. The way to tell them apart is the **request ID**:
+
+- **`request_id == 0`** — the object is an incoming update from TDLib, not a reply to any request.
+- **`request_id != 0`** — the object is a response to the request you sent with that ID.
+
+This is documented directly in `Client.h`:
+
+```cpp Client.h
+if (response.request_id == 0) {
+    // process response.object as an incoming update of the type td_api::Update
+} else {
+    // process response.object as an answer to a request response.request_id
+}
+```
+
+In the JSON interface, updates always arrive with the client's `client_id` and no `@extra` field (or an `@extra` of `null`), while responses echo back the `@extra` value you sent with the request.
+
+## The receive loop
+
+Call `td_receive` in a loop with a timeout. Process each object as it arrives. Do not skip or defer objects — TDLib relies on ordered processing for consistency.
+
+```python tdjson_example.py
+# Main event loop
+while True:
+    event = client.receive()
+    if event:
+        event_type = event["@type"]
+
+        if event_type.startswith("update"):
+            handle_update(event)
+        else:
+            handle_response(event)
+```
+
+The `receive` method wraps `td_receive` with JSON parsing:
+
+```python tdjson_example.py
+def receive(self, timeout: float = 1.0) -> Optional[Dict[str, Any]]:
+    """Receive a response or update from TDLib."""
+    result = self._td_receive(timeout)
+    if result:
+        return json.loads(result.decode("utf-8"))
+    return None
+```
+
+<Warning>
+  Never call `receive` (or `td_receive`) from two threads simultaneously. TDLib's `ClientManager::receive` documentation states explicitly: "must not be called simultaneously from two different threads." Use a single dedicated thread for the receive loop and dispatch work to other threads from there.
+</Warning>
+
+<Tip>
+  Process updates in exactly the order you receive them. Applying updates out of order can leave your local state inconsistent — for example, marking a message as read before you have recorded that the message exists.
+</Tip>
+
+## Common update types
+
+<AccordionGroup>
+  <Accordion title="updateAuthorizationState">
+    Signals a change in the client's authentication status. Always the first update you receive after creating a client. Handle every authorization state to drive the authentication flow.
+
+    ```json
+    {
+      "@type": "updateAuthorizationState",
+      "authorization_state": {
+        "@type": "authorizationStateReady"
+      }
+    }
+    ```
+
+    See [Authorization](/concepts/authorization) for the full state machine.
+  </Accordion>
+
+  <Accordion title="updateNewMessage">
+    A new message arrived in a chat. The `message` field contains the full message object including `chat_id`, `sender_id`, `date`, and `content`.
+
+    ```json
+    {
+      "@type": "updateNewMessage",
+      "message": {
+        "id": 123456789,
+        "chat_id": 987654321,
+        "date": 1712000000,
+        "content": {
+          "@type": "messageText",
+          "text": { "@type": "formattedText", "text": "Hello!" }
+        }
+      }
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="updateChatLastMessage">
+    The last message in a chat changed — either a new message was sent, or the previous last message was deleted. Use this to keep chat list previews up to date.
+
+    ```json
+    {
+      "@type": "updateChatLastMessage",
+      "chat_id": 987654321,
+      "last_message": { "id": 123456790, "date": 1712000060 },
+      "positions": []
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="updateConnectionState">
+    Reports the current network connection state. Use this to show connectivity indicators in your UI.
+
+    ```json
+    {
+      "@type": "updateConnectionState",
+      "state": { "@type": "connectionStateReady" }
+    }
+    ```
+
+    Possible states: `connectionStateWaitingForNetwork`, `connectionStateConnectingToProxy`, `connectionStateConnecting`, `connectionStateUpdating`, `connectionStateReady`.
+  </Accordion>
+
+  <Accordion title="updateUser">
+    Information about a user changed (name, username, photo, status, etc.). Update your local user cache when you receive this.
+
+    ```json
+    {
+      "@type": "updateUser",
+      "user": {
+        "id": 123456,
+        "first_name": "Alice",
+        "last_name": "Smith",
+        "username": "alice"
+      }
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="updateChatReadInbox">
+    The read position in a chat's inbox changed. The `last_read_inbox_message_id` field tells you the most recent message the user has read, and `unread_count` gives the remaining unread count.
+
+    ```json
+    {
+      "@type": "updateChatReadInbox",
+      "chat_id": 987654321,
+      "last_read_inbox_message_id": 123456780,
+      "unread_count": 3
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Filtering updates
+
+You can check `event["@type"]` to route updates to the right handler:
+
+```python update_router.py
+def handle_update(event: dict) -> None:
+    update_type = event["@type"]
+
+    if update_type == "updateAuthorizationState":
+        handle_authorization_state(event["authorization_state"])
+    elif update_type == "updateNewMessage":
+        handle_new_message(event["message"])
+    elif update_type == "updateConnectionState":
+        handle_connection_state(event["state"])
+    elif update_type == "updateUser":
+        update_user_cache(event["user"])
+    elif update_type == "updateChatReadInbox":
+        update_unread_count(event["chat_id"], event["unread_count"])
+    # add handlers for other update types as needed
+```
+
+## Updates during authentication
+
+TDLib starts sending `updateAuthorizationState` immediately after you create a client — even before you call `getOption` or any other request. The client does not begin delivering updates until it receives its first request, so send at least one request right after creating the client:
+
+```python tdjson_example.py
+def login(self) -> None:
+    """Start the authentication process."""
+    self.send({"@type": "getOption", "name": "version"})
+    self._handle_authentication()
+```
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Authorization" icon="key" href="/concepts/authorization">
+    Handle updateAuthorizationState to drive the authentication flow.
+  </Card>
+  <Card title="Error handling" icon="triangle-alert" href="/concepts/error-handling">
+    Understand what to do when TDLib sends an error response instead of an update.
+  </Card>
+</CardGroup>

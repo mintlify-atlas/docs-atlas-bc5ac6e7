@@ -1,97 +1,65 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: "TDLib — Telegram Database Library"
+description: "A cross-platform library for building Telegram clients. Fully asynchronous, multilanguage, and production-ready."
 ---
 
-## Setting up
+TDLib (Telegram Database Library) is an open-source, cross-platform library that provides everything you need to build a fully-functional Telegram client. It handles all network communication, encryption, local storage, and update delivery — so you can focus on building your application.
 
-Get your documentation site up and running in minutes.
-
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
-
-## Make it yours
-
-Design a docs site that looks great and empowers your users.
-
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
+<CardGroup cols={2}>
+  <Card title="Quick Start" icon="rocket" href="/quickstart">
+    Build your first TDLib-powered client in minutes with a working code example.
   </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
+  <Card title="Building TDLib" icon="hammer" href="/building">
+    Step-by-step instructions for compiling TDLib on any supported platform.
   </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
+  <Card title="Language Guides" icon="code" href="/guides/json-interface">
+    Use TDLib from Python, JavaScript, Go, Java, C#, Swift, and 20+ other languages.
   </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
+  <Card title="API Reference" icon="book" href="/api/json-client">
+    Complete reference for the JSON, C++, Java, and .NET interfaces.
   </Card>
-</Columns>
+</CardGroup>
 
-## Create beautiful pages
+## Why TDLib?
 
-Everything you need to create world-class documentation.
+<CardGroup cols={3}>
+  <Card title="Cross-Platform" icon="layer-group">
+    Runs on Android, iOS, Windows, macOS, Linux, WebAssembly, and more. One library for all platforms.
+  </Card>
+  <Card title="Any Language" icon="globe">
+    A universal JSON/C interface means you can use TDLib from Python, Go, Ruby, Rust, or any language that can call C functions.
+  </Card>
+  <Card title="Fully Async" icon="bolt">
+    Requests never block each other. Send thousands of concurrent requests and receive responses as they arrive.
+  </Card>
+  <Card title="Secure by Default" icon="shield">
+    All local data is encrypted with a user-provided key. MTProto encryption is handled automatically.
+  </Card>
+  <Card title="Reliable" icon="signal">
+    TDLib remains stable on slow or unreliable connections, with automatic reconnection and consistent update ordering.
+  </Card>
+  <Card title="Well Documented" icon="file-lines">
+    Every API method and class in the TL schema is fully documented with types, descriptions, and usage notes.
+  </Card>
+</CardGroup>
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
+## Get started
 
-## Need inspiration?
+<Steps>
+  <Step title="Build TDLib">
+    Compile TDLib for your target platform. Follow the [manual build guide](/building).
+  </Step>
+  <Step title="Choose your interface">
+    Pick the interface that works best for your language: [JSON](/guides/json-interface) (works everywhere), [C++](/guides/cpp-interface), [Java/JNI](/guides/java-interface), or [.NET](/guides/dotnet-interface).
+  </Step>
+  <Step title="Authenticate">
+    Follow the [authorization flow](/concepts/authorization) to connect to Telegram with your `api_id` and `api_hash`.
+  </Step>
+  <Step title="Send your first request">
+    Load chats, send messages, and handle real-time updates. See the [quickstart](/quickstart) for a working example.
+  </Step>
+</Steps>
 
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+<Note>
+  You must obtain your own `api_id` and `api_hash` from [my.telegram.org](https://my.telegram.org) before making any requests.
+</Note>

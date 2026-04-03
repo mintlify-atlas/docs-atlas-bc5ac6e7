@@ -1,0 +1,124 @@
+---
+title: "Client (legacy C++ API)"
+description: "The legacy C++ Client class — use ClientManager for new code."
+---
+
+`td::Client` is the original C++ interface for TDLib. It creates a single TDLib instance per `Client` object. This class will be removed in TDLib 2.0.0 — use [`ClientManager`](/api/client-manager) for new code.
+
+<Warning>
+`td::Client` is deprecated and will be removed in TDLib 2.0.0. Prefer `td::ClientManager` for all new projects.
+</Warning>
+
+## Include
+
+```cpp
+#include "td/telegram/Client.h"
+```
+
+## Class reference
+
+### Constructor
+
+```cpp
+Client();
+```
+
+Creates a new TDLib client. The TDLib instance lives for the lifetime of this object.
+
+---
+
+### `send`
+
+```cpp
+void send(Request &&request);
+```
+
+Sends a request to TDLib. May be called from any thread.
+
+#### Request struct
+
+<ParamField path="id" type="uint64_t" required>
+  Request identifier. Must be non-zero. Responses will carry the same `id`. Updates have `id == 0`.
+</ParamField>
+<ParamField path="function" type="td_api::object_ptr<td_api::Function>" required>
+  The API function to call.
+</ParamField>
+
+---
+
+### `receive`
+
+```cpp
+Response receive(double timeout);
+```
+
+Receives the next update or response. Must not be called from two threads simultaneously.
+
+<ParamField path="timeout" type="double" required>
+  Maximum seconds to wait.
+</ParamField>
+
+**Returns:** A `Response` struct. `response.object == nullptr` means timeout expired.
+
+#### Response struct
+
+<ResponseField name="id" type="uint64_t">
+  The request ID this response corresponds to, or `0` for incoming updates.
+</ResponseField>
+<ResponseField name="object" type="td_api::object_ptr<td_api::Object>">
+  The API object returned.
+</ResponseField>
+
+---
+
+### `execute` (static)
+
+```cpp
+static Response execute(Request &&request);
+```
+
+Executes a synchronous request. Only requests marked "Can be called synchronously" are supported.
+
+---
+
+## Usage pattern
+
+```cpp
+#include "td/telegram/Client.h"
+
+auto client = std::make_shared<td::Client>();
+
+const double WAIT_TIMEOUT = 10.0;
+bool is_closed = false;
+
+while (!is_closed) {
+    auto response = client->receive(WAIT_TIMEOUT);
+    if (response.object == nullptr) {
+        continue;
+    }
+
+    if (response.id == 0) {
+        // Incoming update
+        if (response.object->get_id() == td::td_api::updateAuthorizationState::ID) {
+            auto &auth_update = static_cast<td::td_api::updateAuthorizationState &>(*response.object);
+            if (auth_update.authorization_state_->get_id() ==
+                td::td_api::authorizationStateClosed::ID) {
+                is_closed = true;
+            }
+        }
+    } else {
+        // Response to request with id == response.id
+    }
+}
+```
+
+## Migrating to ClientManager
+
+Replace `Client` with `ClientManager` as follows:
+
+| `Client` | `ClientManager` |
+|----------|----------------|
+| `Client client;` | `ClientManager manager; auto id = manager.create_client_id();` |
+| `client.send({req_id, func})` | `manager.send(client_id, req_id, func)` |
+| `client.receive(timeout)` | `manager.receive(timeout)` (check `response.client_id`) |
+| `response.id` | `response.request_id` |

@@ -1,0 +1,173 @@
+---
+title: "File methods"
+description: "TDLib API methods for downloading, uploading, and managing files."
+---
+
+TDLib manages file transfers automatically. Every `file` object has a `local` and `remote` state. Use the methods below to initiate downloads, monitor progress via updates, and send files.
+
+## File object
+
+Every file in TDLib is represented as a `file` object:
+
+<ResponseField name="id" type="int32">
+  Unique file identifier within this TDLib session.
+</ResponseField>
+<ResponseField name="size" type="int53">
+  File size in bytes, or `0` if unknown.
+</ResponseField>
+<ResponseField name="expected_size" type="int53">
+  Expected file size while downloading.
+</ResponseField>
+<ResponseField name="local" type="localFile">
+  Local file state: `is_downloading_active`, `is_downloading_completed`, `download_offset`, `downloaded_prefix_size`, `downloaded_size`, `path`.
+</ResponseField>
+<ResponseField name="remote" type="remoteFile">
+  Remote state: `id`, `unique_id`, `is_uploading_active`, `is_uploading_completed`, `uploaded_size`.
+</ResponseField>
+
+---
+
+## `downloadFile`
+
+Starts or continues downloading a file.
+
+<ParamField path="file_id" type="int32" required>
+  The file ID (from a `file` object).
+</ParamField>
+<ParamField path="priority" type="int32" required>
+  Download priority 1–32. Higher = faster. Use `1` for background, `32` for immediate.
+</ParamField>
+<ParamField path="offset" type="int53">
+  Byte offset to start downloading from. Default: `0`.
+</ParamField>
+<ParamField path="limit" type="int53">
+  Number of bytes to download. `0` means the whole file.
+</ParamField>
+<ParamField path="synchronous" type="bool">
+  If true, wait until the download completes before returning.
+</ParamField>
+
+**Returns:** `file`
+
+Progress updates arrive via `updateFile` updates with the same `file.id`.
+
+```json
+{ "@type": "downloadFile", "file_id": 42, "priority": 1 }
+```
+
+---
+
+## `cancelDownloadFile`
+
+Cancels an in-progress file download.
+
+<ParamField path="file_id" type="int32" required>The file ID.</ParamField>
+<ParamField path="only_if_pending" type="bool">Cancel only if the download hasn't started yet.</ParamField>
+
+**Returns:** `ok`
+
+---
+
+## `getFileDownloadedPrefixSize`
+
+Returns the number of bytes already downloaded for a file starting from a given offset.
+
+<ParamField path="file_id" type="int32" required>The file ID.</ParamField>
+<ParamField path="offset" type="int53" required>Byte offset.</ParamField>
+
+**Returns:** `fileDownloadedPrefixSize`
+
+---
+
+## `uploadFile`
+
+Asynchronously uploads a file to Telegram's servers. Progress updates arrive via `updateFile`.
+
+<ParamField path="file" type="InputFile" required>
+  The file to upload. Use `inputFileLocal` for a local path, `inputFileId` for an already-known file, or `inputFileRemote` for a remote file ID.
+</ParamField>
+<ParamField path="file_type" type="FileType" required>
+  The type of file: `fileTypePhoto`, `fileTypeVideo`, `fileTypeDocument`, `fileTypeAudio`, etc.
+</ParamField>
+<ParamField path="priority" type="int32" required>
+  Upload priority (1–32).
+</ParamField>
+
+**Returns:** `file`
+
+---
+
+## `cancelUploadFile`
+
+Cancels an in-progress file upload.
+
+<ParamField path="file_id" type="int32" required>The file ID.</ParamField>
+
+**Returns:** `ok`
+
+---
+
+## `deleteFile`
+
+Deletes a file from the local TDLib storage.
+
+<ParamField path="file_id" type="int32" required>The file ID.</ParamField>
+
+**Returns:** `ok`
+
+---
+
+## `getRemoteFile`
+
+Fetches a `file` object from a remote file ID string (the `remote.id` field).
+
+<ParamField path="remote_file_id" type="string" required>
+  The remote file ID string.
+</ParamField>
+<ParamField path="file_type" type="FileType">
+  Hint about the file type.
+</ParamField>
+
+**Returns:** `file`
+
+---
+
+## Sending files in messages
+
+Pass an `inputFile` as part of message content:
+
+```json
+{
+  "@type": "sendMessage",
+  "chat_id": 123456789,
+  "input_message_content": {
+    "@type": "inputMessageDocument",
+    "document": {
+      "@type": "inputFileLocal",
+      "path": "/home/user/report.pdf"
+    },
+    "caption": {
+      "@type": "formattedText",
+      "text": "Here is the report."
+    }
+  }
+}
+```
+
+<Note>
+TDLib handles chunked upload automatically. Monitor upload progress by listening for `updateFile` updates with the file's ID.
+</Note>
+
+## Monitoring file progress
+
+```python
+def handle_update(update):
+    if update["@type"] == "updateFile":
+        f = update["file"]
+        local = f["local"]
+        if local["is_downloading_completed"]:
+            print(f"File ready at: {local['path']}")
+        elif local["is_downloading_active"]:
+            pct = local["downloaded_size"] / f["size"] * 100
+            print(f"Downloading: {pct:.1f}%")
+```

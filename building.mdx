@@ -1,0 +1,258 @@
+---
+title: "Building TDLib"
+description: "How to compile TDLib from source for your target platform."
+---
+
+TDLib is compiled from source using CMake. This page covers dependencies, build commands, CMake options for enabling language bindings, and tips for building on low-memory devices.
+
+<Tip>
+  The [TDLib build instructions generator](https://tdlib.github.io/td/build.html) can produce complete, platform-specific build instructions for your target OS and programming language.
+</Tip>
+
+## Dependencies
+
+Before building, install the following on your system:
+
+| Dependency | Version | Notes |
+|------------|---------|-------|
+| C++ compiler | C++17 compatible | Clang 5.0+, GCC 7.0+, MSVC 19.1+ (VS 2017.7+), Intel C++ 19+ |
+| CMake | 3.10+ | Build system |
+| OpenSSL | Any recent | For encryption |
+| zlib | Any recent | For compression |
+| gperf | Any | Build-time only |
+| PHP | Optional | For documentation generation |
+
+<Tabs>
+  <Tab title="Ubuntu / Debian">
+    ```bash
+    sudo apt-get update
+    sudo apt-get install -y \
+      build-essential \
+      cmake \
+      gperf \
+      libssl-dev \
+      zlib1g-dev
+    ```
+  </Tab>
+  <Tab title="macOS">
+    ```bash
+    brew install cmake gperf openssl
+    ```
+
+    <Note>
+      On macOS, you may need to set `OPENSSL_ROOT_DIR` when running CMake:
+
+      ```bash
+      cmake -DCMAKE_BUILD_TYPE=Release \
+            -DOPENSSL_ROOT_DIR=$(brew --prefix openssl) ..
+      ```
+    </Note>
+  </Tab>
+  <Tab title="Windows">
+    Install the following:
+
+    - [Visual Studio 2017.7 or later](https://visualstudio.microsoft.com/) with the **Desktop development with C++** workload
+    - [CMake](https://cmake.org/download/) 3.10 or later
+    - [OpenSSL for Windows](https://slproweb.com/products/Win32OpenSSL.html)
+    - [vcpkg](https://github.com/microsoft/vcpkg) (recommended for managing OpenSSL and zlib)
+
+    With vcpkg:
+
+    ```powershell
+    vcpkg install openssl zlib
+    ```
+  </Tab>
+</Tabs>
+
+## Basic build
+
+<Steps>
+  <Step title="Clone the repository">
+    ```bash
+    git clone https://github.com/tdlib/td.git
+    cd td
+    ```
+  </Step>
+
+  <Step title="Create a build directory">
+    Always build out-of-source to keep the source tree clean:
+
+    ```bash
+    mkdir build
+    cd build
+    ```
+  </Step>
+
+  <Step title="Configure with CMake">
+    ```bash
+    cmake -DCMAKE_BUILD_TYPE=Release ..
+    ```
+
+    For a debug build:
+
+    ```bash
+    cmake -DCMAKE_BUILD_TYPE=Debug ..
+    ```
+  </Step>
+
+  <Step title="Compile">
+    ```bash
+    cmake --build .
+    ```
+
+    To build only specific targets (faster if you only need the JSON interface):
+
+    ```bash
+    cmake --build . --target tdjson
+    ```
+  </Step>
+</Steps>
+
+## CMake options
+
+Use these options with `-D` flags during the configure step to enable specific interfaces:
+
+| Option | Default | Effect |
+|--------|---------|--------|
+| `CMAKE_BUILD_TYPE` | — | `Release` or `Debug` |
+| `TD_ENABLE_JNI` | `OFF` | Enable Java JNI bindings |
+| `TD_ENABLE_DOTNET` | `OFF` | Enable .NET bindings via C++/CLI |
+| `TD_ENABLE_DOTNET=CX` | — | Enable .NET bindings via C++/CX (UWP) |
+
+### Enable Java (JNI) bindings
+
+```bash
+cmake -DCMAKE_BUILD_TYPE=Release -DTD_ENABLE_JNI=ON ..
+cmake --build .
+```
+
+See the `example/java` directory for usage instructions.
+
+### Enable .NET bindings
+
+<Tabs>
+  <Tab title="C++/CLI (.NET Core 3.1+, Windows only)">
+    ```bash
+    cmake -DCMAKE_BUILD_TYPE=Release -DTD_ENABLE_DOTNET=ON ..
+    cmake --build .
+    ```
+  </Tab>
+  <Tab title="C++/CX (UWP)">
+    ```bash
+    cmake -DCMAKE_BUILD_TYPE=Release -DTD_ENABLE_DOTNET=CX ..
+    cmake --build .
+    ```
+  </Tab>
+</Tabs>
+
+<Warning>
+  Building with `TD_ENABLE_DOTNET` removes C++ documentation comments from `td/telegram/Client.h`, `td/telegram/Log.h`, and `td/tl/TlObject.h`. To restore them after building, run:
+
+  ```bash
+  git checkout td/telegram/Client.h td/telegram/Log.h td/tl/TlObject.h
+  ```
+</Warning>
+
+## Available CMake targets
+
+| Target | Description |
+|--------|-------------|
+| `Td::TdJson` | Dynamic library exposing the JSON/C interface |
+| `Td::TdJsonStatic` | Static library exposing the JSON/C interface |
+| `Td::TdStatic` | Static library with the native C++ interface |
+| `tdjson` | Alias for the dynamic JSON library (use with `--target tdjson`) |
+| `tdjson_static` | Alias for the static JSON library |
+
+## Using TDLib in a CMake project
+
+### As a subdirectory
+
+Place the TDLib source tree inside your project and add it as a subdirectory:
+
+```cmake CMakeLists.txt
+cmake_minimum_required(VERSION 3.10)
+project(MyTelegramApp)
+
+add_subdirectory(td)
+
+add_executable(my_app main.cpp)
+target_link_libraries(my_app PRIVATE Td::TdStatic)
+```
+
+### As an installed package
+
+Build and install TDLib system-wide, then reference it with `find_package`:
+
+```bash
+cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/usr/local ..
+cmake --build .
+sudo cmake --install .
+```
+
+```cmake CMakeLists.txt
+cmake_minimum_required(VERSION 3.10)
+project(MyTelegramApp)
+
+find_package(Td 1.8.62 REQUIRED)
+
+add_executable(my_app main.cpp)
+target_link_libraries(my_app PRIVATE Td::TdStatic)
+```
+
+### Linking the JSON interface
+
+If you only need the JSON/C interface (for example, when wrapping TDLib from another language):
+
+```cmake CMakeLists.txt
+find_package(Td REQUIRED)
+
+add_library(my_wrapper wrapper.c)
+target_link_libraries(my_wrapper PRIVATE Td::TdJson)
+```
+
+## Building on low-memory devices
+
+Compiling TDLib on devices with limited RAM (less than 1–2 GB) can fail due to memory exhaustion during compilation. Use the `SplitSource.php` script to split large source files before building:
+
+<Steps>
+  <Step title="Run SplitSource.php">
+    ```bash
+    php SplitSource.php
+    ```
+
+    This splits large generated source files into smaller chunks that require less memory per compilation unit. In testing, Clang 6.0 with libc++ required less than 500 MB per file and GCC required less than 1 GB per file after splitting.
+  </Step>
+
+  <Step title="Build only the targets you need">
+    ```bash
+    mkdir build
+    cd build
+    cmake -DCMAKE_BUILD_TYPE=Release ..
+    cmake --build . --target tdjson
+    cmake --build . --target tdjson_static
+    cd ..
+    ```
+  </Step>
+
+  <Step title="Undo the split">
+    After building, restore the source files to their original state:
+
+    ```bash
+    php SplitSource.php --undo
+    ```
+  </Step>
+</Steps>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Quick start" icon="rocket" href="/quickstart">
+    Use the compiled library to build a working Telegram client in Python.
+  </Card>
+  <Card title="JSON interface guide" icon="brackets-curly" href="/guides/json-interface">
+    Learn how to use the `tdjson` shared library from any programming language.
+  </Card>
+  <Card title="JSON client API reference" icon="book" href="/api/json-client">
+    Full reference for all functions exposed by `td_json_client.h`.
+  </Card>
+</CardGroup>

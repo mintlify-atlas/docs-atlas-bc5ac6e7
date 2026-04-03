@@ -1,0 +1,203 @@
+---
+title: "Chat methods"
+description: "TDLib API methods for loading, searching, and managing chats."
+---
+
+## `getChats`
+
+Returns the requested number of chats from the beginning of a chat list. Use this for initial load or when you don't need to maintain a consistent ordered list.
+
+<ParamField path="chat_list" type="ChatList">
+  Which list to load from. `chatListMain` (default), `chatListArchive`, or `chatListFolder`.
+</ParamField>
+<ParamField path="limit" type="int32" required>
+  Maximum number of chats to return.
+</ParamField>
+
+**Returns:** `chats` — an object with a `chat_ids` array.
+
+```json
+{ "@type": "getChats", "limit": 20 }
+```
+
+---
+
+## `loadChats`
+
+Loads more chats from a list. Used when maintaining a live, ordered chat list. Returns a 404 error when no more chats are available.
+
+<ParamField path="chat_list" type="ChatList">
+  Which list to load from.
+</ParamField>
+<ParamField path="limit" type="int32" required>
+  Approximate number of chats to load.
+</ParamField>
+
+**Returns:** `ok` (updates arrive via `updateChatPosition`)
+
+---
+
+## `getChat`
+
+Fetches a chat object by ID.
+
+<ParamField path="chat_id" type="int53" required>
+  The chat ID.
+</ParamField>
+
+**Returns:** `chat`
+
+---
+
+## `searchChats`
+
+Searches for chats by title prefix.
+
+<ParamField path="query" type="string" required>
+  Search query (prefix match on chat titles).
+</ParamField>
+<ParamField path="limit" type="int32" required>
+  Maximum results.
+</ParamField>
+
+**Returns:** `chats`
+
+---
+
+## `searchPublicChats`
+
+Searches for public chats by username.
+
+<ParamField path="query" type="string" required>
+  Username prefix to search.
+</ParamField>
+
+**Returns:** `chats`
+
+---
+
+## `createPrivateChat`
+
+Opens or creates a private chat with a user.
+
+<ParamField path="user_id" type="int53" required>
+  The user ID.
+</ParamField>
+<ParamField path="force" type="bool">
+  If true, create a new chat even if a local one exists.
+</ParamField>
+
+**Returns:** `chat`
+
+---
+
+## `createBasicGroupChat`
+
+Opens an existing basic group chat.
+
+<ParamField path="basic_group_id" type="int53" required>
+  The basic group ID.
+</ParamField>
+
+**Returns:** `chat`
+
+---
+
+## `createNewBasicGroupChat`
+
+Creates a new basic group chat.
+
+<ParamField path="user_ids" type="vector<int53>" required>
+  Initial members (not including the current user).
+</ParamField>
+<ParamField path="title" type="string" required>
+  Group title (1–128 characters).
+</ParamField>
+
+**Returns:** `chat`
+
+---
+
+## `createNewSupergroupChat`
+
+Creates a new supergroup or channel.
+
+<ParamField path="title" type="string" required>
+  Chat title.
+</ParamField>
+<ParamField path="is_forum" type="bool">
+  Create as a forum (topics-enabled supergroup).
+</ParamField>
+<ParamField path="is_channel" type="bool">
+  Create as a broadcast channel instead of a supergroup.
+</ParamField>
+<ParamField path="description" type="string">
+  Optional description.
+</ParamField>
+
+**Returns:** `chat`
+
+---
+
+## `setChatTitle`
+
+Changes the title of a chat.
+
+<ParamField path="chat_id" type="int53" required>Chat ID.</ParamField>
+<ParamField path="title" type="string" required>New title (1–128 characters).</ParamField>
+
+**Returns:** `ok`
+
+---
+
+## `setChatDescription`
+
+Sets the description for a supergroup or channel.
+
+<ParamField path="chat_id" type="int53" required>Chat ID.</ParamField>
+<ParamField path="description" type="string" required>New description (up to 255 characters).</ParamField>
+
+**Returns:** `ok`
+
+---
+
+## `leaveChat`
+
+Removes the current user from a group, supergroup, or channel.
+
+<ParamField path="chat_id" type="int53" required>Chat ID.</ParamField>
+
+**Returns:** `ok`
+
+---
+
+## `deleteChat`
+
+Completely deletes a chat and all its messages for the current user.
+
+<ParamField path="chat_id" type="int53" required>Chat ID.</ParamField>
+
+**Returns:** `ok`
+
+---
+
+## `getChatMember`
+
+Returns information about a chat member.
+
+<ParamField path="chat_id" type="int53" required>Chat ID.</ParamField>
+<ParamField path="member_id" type="MessageSender" required>The member's ID (user or channel).</ParamField>
+
+**Returns:** `chatMember`
+
+---
+
+## `setChatMemberStatus`
+
+Changes a member's status in a supergroup or channel (ban, restrict, promote, etc.).
+
+<ParamField path="chat_id" type="int53" required>Chat ID.</ParamField>
+<ParamField path="member_id" type="MessageSender" required>The member's ID.</ParamField>
+<ParamField path="status" type="ChatMemberStatus" required>New status: `chatMemberStatusAdministrator`, `chatMemberStatusRestricted`, `chatMemberStatusBanned`, `chatMemberStatusMember`, or `chatMemberStatusLeft`.</ParamField>
+
+**Returns:** `ok`

@@ -1,0 +1,212 @@
+---
+title: "C++ Interface"
+description: "Use TDLib natively from C++ with the ClientManager API."
+---
+
+TDLib provides a first-class C++ interface that gives you strongly-typed access to all API objects and methods. The C++ interface is the most direct way to use TDLib from C++ and is recommended over the [JSON interface](/guides/json-interface) when working in C++.
+
+## ClientManager vs Client
+
+TDLib exposes two C++ classes in `td/telegram/Client.h`:
+
+| Class | Status | Description |
+|---|---|---|
+| `td::ClientManager` | Current | Manages one or more TDLib instances. All instances share a single receive loop. Preferred for all new code. |
+| `td::Client` | Deprecated | One-to-one wrapper around a single TDLib instance. Will be removed in TDLib 2.0.0. |
+
+Use `ClientManager` for all new projects.
+
+## Including headers
+
+```cpp
+#include <td/telegram/Client.h>
+#include <td/telegram/td_api.h>
+#include <td/telegram/td_api.hpp>
+```
+
+- `Client.h` — declares `ClientManager` and `Client`.
+- `td_api.h` / `td_api.hpp` — generated classes for every TDLib API object and function.
+
+## ClientManager usage pattern
+
+The general pattern from the `ClientManager` documentation:
+
+```cpp ClientManager event loop
+td::ClientManager manager;
+auto client_id = manager.create_client_id();
+// share manager and client_id with other threads as needed
+
+// activate the client by sending at least one request
+manager.send(client_id, 1, td_api::make_object<td_api::getOption>("version"));
+
+const double WAIT_TIMEOUT = 10.0;  // seconds
+while (true) {
+  auto response = manager.receive(WAIT_TIMEOUT);
+  if (response.object == nullptr) {
+    continue;
+  }
+
+  if (response.request_id == 0) {
+    // incoming update of type td_api::Update for client response.client_id
+  } else {
+    // answer to a request with id response.request_id for client response.client_id
+  }
+}
+```
+
+The `Response` struct carries three fields:
+
+| Field | Type | Description |
+|---|---|---|
+| `client_id` | `ClientId` (`int32_t`) | The client that produced this response or update. |
+| `request_id` | `RequestId` (`uint64_t`) | Matches the id you passed to `send`. Zero means it is an unsolicited update. |
+| `object` | `td_api::object_ptr<td_api::Object>` | The returned API object. `nullptr` when the timeout expires. |
+
+## Sending requests
+
+```cpp
+void send_query(
+    td::ClientManager &manager,
+    td::ClientManager::ClientId client_id,
+    td_api::object_ptr<td_api::Function> request,
+    td::ClientManager::RequestId request_id)
+{
+  manager.send(client_id, request_id, std::move(request));
+}
+```
+
+Each non-zero `request_id` lets you correlate responses to their originating requests. The example in `example/cpp/td_example.cpp` stores a `std::map` of handlers keyed by request id:
+
+```cpp dispatching responses with a handler map
+std::map<std::uint64_t, std::function<void(Object)>> handlers_;
+
+void process_response(td::ClientManager::Response response) {
+  if (!response.object) {
+    return;
+  }
+  if (response.request_id == 0) {
+    return process_update(std::move(response.object));
+  }
+  auto it = handlers_.find(response.request_id);
+  if (it != handlers_.end()) {
+    it->second(std::move(response.object));
+    handlers_.erase(it);
+  }
+}
+```
+
+## Synchronous execution
+
+A small number of requests are documented as "Can be called synchronously". Call them through the static `ClientManager::execute`:
+
+```cpp
+td::ClientManager::execute(td_api::make_object<td_api::setLogVerbosityLevel>(1));
+```
+
+This is safe to call before creating a `ClientManager` instance.
+
+## Handling authorization
+
+Respond to `updateAuthorizationState` updates as they arrive. The following excerpt from `example/cpp/td_example.cpp` shows how to handle `authorizationStateWaitTdlibParameters`:
+
+```cpp setting TDLib parameters on authorization state update
+void on_authorization_state_update() {
+  td_api::downcast_call(*authorization_state_,
+    overloaded(
+      [this](td_api::authorizationStateWaitTdlibParameters &) {
+        auto request = td_api::make_object<td_api::setTdlibParameters>();
+        request->database_directory_ = "tdlib";
+        request->use_message_database_ = true;
+        request->use_secret_chats_ = true;
+        request->api_id_ = 94575;
+        request->api_hash_ = "a3406de8d171bb422bb6ddf3bbd800e2";
+        request->system_language_code_ = "en";
+        request->device_model_ = "Desktop";
+        request->application_version_ = "1.0";
+        send_query(std::move(request), create_authentication_query_handler());
+      },
+      [this](td_api::authorizationStateReady &) {
+        are_authorized_ = true;
+        std::cout << "Authorization is completed" << std::endl;
+      },
+      // ... other states
+      [](auto &) {}));
+}
+```
+
+<Warning>
+  Always obtain your own `api_id` and `api_hash` from [https://my.telegram.org](https://my.telegram.org). The values shown in example files are for demonstration only.
+</Warning>
+
+## Sending a text message
+
+```cpp sending a text message
+auto send_message = td_api::make_object<td_api::sendMessage>();
+send_message->chat_id_ = chat_id;
+
+auto message_content = td_api::make_object<td_api::inputMessageText>();
+message_content->text_ = td_api::make_object<td_api::formattedText>();
+message_content->text_->text_ = "Hello from TDLib!";
+send_message->input_message_content_ = std::move(message_content);
+
+manager.send(client_id, next_query_id(), std::move(send_message));
+```
+
+## CMake integration
+
+<Tabs>
+  <Tab title="Subdirectory (source)">
+    Add TDLib as a subdirectory of your project and link against it:
+
+    ```cmake CMakeLists.txt
+    add_subdirectory(td)
+    target_link_libraries(YourTarget PRIVATE Td::TdStatic)
+    ```
+  </Tab>
+  <Tab title="Installed package">
+    If TDLib is installed system-wide or to a prefix, use `find_package`:
+
+    ```cmake CMakeLists.txt
+    find_package(Td 1.8.62 REQUIRED)
+    target_link_libraries(YourTarget PRIVATE Td::TdStatic)
+    ```
+  </Tab>
+  <Tab title="JSON library">
+    To link the C JSON interface instead of the native C++ library:
+
+    ```cmake CMakeLists.txt
+    find_package(Td 1.8.62 REQUIRED)
+    # dynamic version
+    target_link_libraries(YourTarget PRIVATE Td::TdJson)
+    # static version
+    target_link_libraries(YourTarget PRIVATE Td::TdJsonStatic)
+    ```
+  </Tab>
+</Tabs>
+
+See `example/cpp/CMakeLists.txt` in the TDLib repository for a complete working example.
+
+## Available CMake targets
+
+| Target | Description |
+|---|---|
+| `Td::TdStatic` | Static library with the native C++ interface. |
+| `Td::TdJson` | Dynamic library with the C JSON interface. |
+| `Td::TdJsonStatic` | Static library with the C JSON interface. |
+
+## Further reading
+
+<CardGroup cols={2}>
+  <Card title="API reference" icon="file-code" href="/api/client-manager">
+    Full documentation for `ClientManager` and `Client`.
+  </Card>
+  <Card title="Building TDLib" icon="hammer" href="/building">
+    Compiler requirements and build instructions.
+  </Card>
+  <Card title="Authorization" icon="lock" href="/concepts/authorization">
+    The full authorization state machine.
+  </Card>
+  <Card title="JSON interface" icon="braces" href="/guides/json-interface">
+    Using TDLib from non-C++ languages.
+  </Card>
+</CardGroup>

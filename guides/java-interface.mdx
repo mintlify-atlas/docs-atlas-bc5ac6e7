@@ -1,0 +1,151 @@
+---
+title: "Java Interface"
+description: "Use TDLib from Java or Kotlin via the native JNI binding."
+---
+
+TDLib provides a native Java interface through JNI (Java Native Interface). The binding includes a generator that produces Java classes for all TDLib API methods and objects, giving you a fully-typed API without any JSON serialization in your application code.
+
+## Enabling JNI support
+
+Pass `-DTD_ENABLE_JNI=ON` to CMake when building TDLib:
+
+```bash building TDLib with JNI support
+cd <path to TDLib sources>
+mkdir jnibuild
+cd jnibuild
+cmake -DCMAKE_BUILD_TYPE=Release \
+      -DTD_ENABLE_JNI=ON \
+      -DCMAKE_INSTALL_PREFIX:PATH=../example/java/td \
+      ..
+cmake --build . --target install
+```
+
+<Tip>
+  On Windows with MSVC, add `-A Win32` or `-A x64` to match your JVM architecture. When using vcpkg, also add `-DCMAKE_TOOLCHAIN_FILE=<VCPKG_DIR>/scripts/buildsystems/vcpkg.cmake`.
+</Tip>
+
+The build installs the native library (`libtdjni.so` / `tdjni.dll`) and generates Java source files for all API types into the install prefix.
+
+## Generated Java classes
+
+TDLib generates a complete set of Java classes for every API object and function. These are placed under `org/drinkless/tdlib/` and include:
+
+- `TdApi.java` — all API objects and functions as inner classes of `TdApi`.
+- `Client.java` — the main client class that wraps the native library.
+- `JsonClient.java` — an alternative wrapper for the JSON interface (enable with `-DTD_JSON_JAVA=ON`).
+
+### Loading the native library
+
+The generated `Client.java` loads the native library in a static initializer:
+
+```java Client.java static initializer
+static {
+    try {
+        System.loadLibrary("tdjni");
+    } catch (UnsatisfiedLinkError e) {
+        e.printStackTrace();
+    }
+}
+```
+
+Pass the directory containing the native library at runtime:
+
+```bash running a Java example
+java '-Djava.library.path=.' org/drinkless/tdlib/example/Example
+```
+
+### Result and update handler
+
+```java ResultHandler interface
+public interface ResultHandler {
+    /**
+     * Callback called on result of query to TDLib or incoming update from TDLib.
+     * @param object Result of query or update of type TdApi.Update about new events.
+     */
+    void onResult(TdApi.Object object);
+}
+```
+
+Pass a `ResultHandler` to `Client.send` to receive the response to a specific request. Pass one to `Client.create` to receive all unsolicited updates.
+
+## Building and running the desktop example
+
+<Steps>
+  <Step title="Build TDLib with JNI">
+    Run the CMake commands shown above to build and install TDLib with JNI enabled.
+  </Step>
+  <Step title="Build the Java example">
+    ```bash
+    cd <path to TDLib sources>/example/java
+    mkdir build && cd build
+    cmake -DCMAKE_BUILD_TYPE=Release \
+          -DTd_DIR=<full path to TDLib sources>/example/java/td/lib/cmake/Td \
+          -DCMAKE_INSTALL_PREFIX:PATH=.. \
+          ..
+    cmake --build . --target install
+    ```
+  </Step>
+  <Step title="Run the example">
+    ```bash
+    cd <path to TDLib sources>/example/java/bin
+    java '-Djava.library.path=.' org/drinkless/tdlib/example/Example
+    ```
+  </Step>
+</Steps>
+
+The compiled native library and Javadoc documentation are placed in `bin/` and `docs/` respectively.
+
+## Android
+
+For Android builds, see `example/android` in the TDLib repository. It contains a complete CMake setup and Gradle integration for building TDLib as an Android AAR, including all required NDK toolchain configuration.
+
+## JSON interface alternative
+
+If you prefer to use the JSON interface from Java (for example, to avoid generating all TDLib API classes), build the example with `-DTD_JSON_JAVA=ON`:
+
+```bash building the JSON Java example
+cmake -DTD_JSON_JAVA=ON ...
+```
+
+Then run:
+
+```bash
+java '-Djava.library.path=.' org/drinkless/tdlib/example/JsonExample
+```
+
+`JsonClient.java` wraps `td_json_client_create`, `td_json_client_send`, `td_json_client_receive`, and `td_json_client_destroy` through JNI.
+
+## Kotlin
+
+Kotlin/JVM uses TDLib in exactly the same way as Java — the same JNI build, the same generated classes, and the same `Client` API.
+
+<Tip>
+  Two Kotlin-specific libraries offer idiomatic wrappers and coroutine support:
+  - [ktd](https://github.com/whyoleg/ktd) — Kotlin-specific bindings for TDLib.
+  - [td-ktx](https://github.com/tdlibx/td-ktx) — Kotlin coroutines wrapper for TDLib.
+</Tip>
+
+## Troubleshooting
+
+| Error | Solution |
+|---|---|
+| `Could NOT find JNI` during CMake | Specify `-DJAVA_HOME=/path/to/jdk` |
+| `java.lang.UnsatisfiedLinkError: Can't find dependent libraries` | Copy OpenSSL and zlib shared libraries into the `bin/` directory |
+| Architecture mismatch | Ensure you compiled TDLib for the same architecture (32-bit / 64-bit) as your JVM |
+
+## Further reading
+
+<CardGroup cols={2}>
+  <Card title="Building TDLib" icon="hammer" href="/building">
+    Full build instructions including the JNI target.
+  </Card>
+  <Card title="Authorization" icon="lock" href="/concepts/authorization">
+    The TDLib authorization state machine.
+  </Card>
+  <Card title="JSON interface" icon="braces" href="/guides/json-interface">
+    Using TDLib from any language via the C JSON interface.
+  </Card>
+  <Card title="Other languages" icon="globe" href="/guides/other-languages">
+    Community bindings for Go, Rust, Swift, and more.
+  </Card>
+</CardGroup>

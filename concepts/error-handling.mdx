@@ -1,0 +1,208 @@
+---
+title: "Error handling"
+description: "How TDLib reports errors and how to handle them in your application."
+---
+
+TDLib communicates failures through a uniform `error` object. Every asynchronous request can produce an error response in place of its normal result. Handling errors correctly keeps your application robust and compliant with Telegram's rules.
+
+## The error object
+
+Whenever a TDLib request fails, the response object has `@type` equal to `"error"`. The schema is defined in `td_api.tl`:
+
+```tl td_api.tl
+//@description An object of this type can be returned on every function call, in case of an error
+//@code Error code; subject to future changes. If the error code is 406, the error message
+//-     must not be processed in any way and must not be displayed to the user
+//@message Error message; subject to future changes
+error code:int32 message:string = Error;
+```
+
+A typical error response looks like this:
+
+```json error response
+{
+  "@type": "error",
+  "code": 400,
+  "message": "PHONE_NUMBER_INVALID",
+  "@extra": "req_42"
+}
+```
+
+The `@extra` field echoes back the value you sent with the request, letting you match the error to the original call.
+
+## Error codes
+
+<AccordionGroup>
+  <Accordion title="400 — Bad request">
+    The request was malformed or the parameters are invalid. The `message` field contains a machine-readable error identifier such as `PHONE_NUMBER_INVALID` or `MESSAGE_ID_INVALID`. Fix the input before retrying.
+
+    ```json
+    { "@type": "error", "code": 400, "message": "PHONE_NUMBER_INVALID" }
+    ```
+  </Accordion>
+
+  <Accordion title="401 — Unauthorized">
+    The client is not authorized. This typically means the session has been revoked or the bot token is invalid. Re-authenticate the user.
+
+    ```json
+    { "@type": "error", "code": 401, "message": "SESSION_REVOKED" }
+    ```
+  </Accordion>
+
+  <Accordion title="403 — Forbidden">
+    The action is not allowed for this user or bot. Common reasons include trying to send a message to a user who has blocked you, or accessing a private channel without membership.
+
+    ```json
+    { "@type": "error", "code": 403, "message": "USER_PRIVACY_RESTRICTED" }
+    ```
+  </Accordion>
+
+  <Accordion title="404 — Not found">
+    The requested resource does not exist or is not accessible. For example, a message ID that has been deleted, or a chat that the user is not a member of.
+
+    ```json
+    { "@type": "error", "code": 404, "message": "CHAT_NOT_FOUND" }
+    ```
+  </Accordion>
+
+  <Accordion title="406 — Do not display to user">
+    A special error code used by Telegram. **You must never show the `message` field to the user when the code is 406.** The message is intended for developer diagnostics only. Log it internally and surface a generic error to the user instead.
+
+    ```json
+    { "@type": "error", "code": 406, "message": "..." }
+    ```
+  </Accordion>
+
+  <Accordion title="429 — Flood wait">
+    You have sent too many requests. The `message` field contains the number of seconds you must wait before retrying, in the format `FLOOD_WAIT_X` where `X` is the wait time.
+
+    ```json
+    { "@type": "error", "code": 429, "message": "FLOOD_WAIT_30" }
+    ```
+
+    Parse the wait time and back off before retrying:
+
+    ```python flood_wait.py
+    import re
+    import time
+
+    def handle_error(error: dict) -> None:
+        if error["code"] == 429:
+            match = re.search(r"FLOOD_WAIT_(\d+)", error["message"])
+            if match:
+                wait_seconds = int(match.group(1))
+                print(f"Rate limited. Waiting {wait_seconds} seconds.")
+                time.sleep(wait_seconds)
+                # retry the request
+    ```
+  </Accordion>
+
+  <Accordion title="500 — Internal error">
+    An internal TDLib error. This can also occur while the client is closing — all requests return 500 after `authorizationStateClosing` is received. If you see 500 outside of a shutdown sequence, report it.
+
+    ```json
+    { "@type": "error", "code": 500, "message": "Request aborted" }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## The 406 rule
+
+<Warning>
+  When you receive an error with `code == 406`, you **must not** display the `message` string to the user in any form — not raw, not reformatted, not translated. Log it for debugging, then show a generic fallback message. This is a hard requirement from Telegram.
+</Warning>
+
+```python error_display.py
+def user_facing_error(error: dict) -> str:
+    """Return a safe string to show the user."""
+    if error["code"] == 406:
+        # Never expose the message field for 406 errors
+        return "Something went wrong. Please try again."
+    return f"Error {error['code']}: {error['message']}"
+```
+
+## Handling errors in the receive loop
+
+Check the `@type` of every non-update response. If it is `"error"`, route it to your error handler:
+
+```python error_handler.py
+def handle_response(event: dict) -> None:
+    if event["@type"] == "error":
+        code = event["code"]
+        message = event["message"]
+
+        if code == 406:
+            log.warning("TDLib 406 error (not shown to user): %s", message)
+            notify_user("Something went wrong. Please try again.")
+
+        elif code == 429:
+            wait = parse_flood_wait(message)
+            log.info("Flood wait: %d seconds", wait)
+            schedule_retry(wait)
+
+        elif code == 401:
+            log.error("Session unauthorized: %s", message)
+            trigger_reauth()
+
+        else:
+            log.error("TDLib error %d: %s", code, message)
+    else:
+        # handle normal response
+        dispatch_response(event)
+```
+
+## Retrying requests
+
+<Tip>
+  Not all errors are worth retrying. Use this heuristic:
+
+  - **400** — fix the input, do not retry the same request.
+  - **401** — re-authenticate, then retry.
+  - **403** — do not retry; the action is not permitted.
+  - **404** — do not retry; the resource is gone.
+  - **406** — do not retry; surface a generic error to the user.
+  - **429** — wait the specified number of seconds, then retry.
+  - **500** — if the client is closing, wait for a new session; otherwise retry with exponential backoff.
+</Tip>
+
+A simple retry wrapper for flood wait errors:
+
+```python retry.py
+import re
+import time
+
+def send_with_retry(client, request: dict, max_retries: int = 3) -> None:
+    for attempt in range(max_retries):
+        client.send(request)
+        response = client.receive(timeout=30.0)
+
+        if response is None:
+            continue
+
+        if response["@type"] != "error":
+            return response  # success
+
+        code = response["code"]
+
+        if code == 429:
+            match = re.search(r"FLOOD_WAIT_(\d+)", response["message"])
+            wait = int(match.group(1)) if match else 5
+            time.sleep(wait)
+            continue
+
+        # non-retriable error
+        raise RuntimeError(f"TDLib error {code}: {response['message']}")
+
+    raise RuntimeError("Exceeded maximum retries")
+```
+
+## Related
+
+<CardGroup cols={2}>
+  <Card title="Updates" icon="bell" href="/concepts/updates">
+    Learn how to distinguish error responses from update objects in the receive loop.
+  </Card>
+  <Card title="Authorization" icon="key" href="/concepts/authorization">
+    Handle 401 errors by restarting the authentication flow.
+  </Card>
+</CardGroup>

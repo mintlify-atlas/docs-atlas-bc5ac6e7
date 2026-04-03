@@ -1,0 +1,160 @@
+---
+title: "Authentication methods"
+description: "TDLib API methods for user and bot authentication."
+---
+
+These methods drive the TDLib authorization state machine. Call them in response to `updateAuthorizationState` updates. See [Authorization](/concepts/authorization) for the full flow.
+
+## `setTdlibParameters`
+
+Configures TDLib for the current session. Must be called first in response to `authorizationStateWaitTdlibParameters`.
+
+<ParamField path="use_test_dc" type="bool">
+  Use Telegram's test servers instead of production. Default: `false`.
+</ParamField>
+<ParamField path="database_directory" type="string" required>
+  Path to the directory for storing the local database.
+</ParamField>
+<ParamField path="files_directory" type="string">
+  Path for downloaded files. Defaults inside `database_directory` if empty.
+</ParamField>
+<ParamField path="database_encryption_key" type="bytes">
+  Encryption key for the local database. Use an empty string to disable encryption (not recommended).
+</ParamField>
+<ParamField path="use_file_database" type="bool">
+  Store file metadata in the database. Default: `true`.
+</ParamField>
+<ParamField path="use_chat_info_database" type="bool">
+  Cache chat/user info in the database. Default: `true`.
+</ParamField>
+<ParamField path="use_message_database" type="bool">
+  Store messages in the database for offline access. Default: `true`.
+</ParamField>
+<ParamField path="use_secret_chats" type="bool">
+  Support end-to-end encrypted secret chats. Default: `false`.
+</ParamField>
+<ParamField path="api_id" type="int32" required>
+  Your application API ID from [my.telegram.org](https://my.telegram.org).
+</ParamField>
+<ParamField path="api_hash" type="string" required>
+  Your application API hash from [my.telegram.org](https://my.telegram.org).
+</ParamField>
+<ParamField path="system_language_code" type="string" required>
+  IETF language tag for the device locale, e.g. `"en"`.
+</ParamField>
+<ParamField path="device_model" type="string" required>
+  Device model description, e.g. `"Desktop"`.
+</ParamField>
+<ParamField path="application_version" type="string" required>
+  Your application's version string.
+</ParamField>
+
+```json
+{
+  "@type": "setTdlibParameters",
+  "database_directory": "tdlib_data",
+  "use_message_database": true,
+  "use_secret_chats": false,
+  "api_id": 12345,
+  "api_hash": "your_api_hash",
+  "system_language_code": "en",
+  "device_model": "Desktop",
+  "application_version": "1.0"
+}
+```
+
+**Returns:** `ok`
+
+---
+
+## `setAuthenticationPhoneNumber`
+
+Provides a phone number to begin user authentication. Call after `authorizationStateWaitPhoneNumber`.
+
+<ParamField path="phone_number" type="string" required>
+  Phone number in international format, e.g. `"+15551234567"`.
+</ParamField>
+<ParamField path="settings" type="phoneNumberAuthenticationSettings">
+  Optional. Controls allowed authentication methods (SMS, call, flash call, etc.).
+</ParamField>
+
+**Returns:** `ok`
+
+---
+
+## `checkAuthenticationCode`
+
+Validates the authentication code sent to the user's phone or Telegram app.
+
+<ParamField path="code" type="string" required>
+  The authentication code entered by the user.
+</ParamField>
+
+**Returns:** `ok`
+
+---
+
+## `checkAuthenticationPassword`
+
+Provides the two-step verification password.
+
+<ParamField path="password" type="string" required>
+  The user's cloud password.
+</ParamField>
+
+**Returns:** `ok`
+
+---
+
+## `registerUser`
+
+Registers a new user. Call after `authorizationStateWaitRegistration` for new accounts.
+
+<ParamField path="first_name" type="string" required>
+  User's first name (1–64 characters).
+</ParamField>
+<ParamField path="last_name" type="string">
+  User's last name (0–64 characters).
+</ParamField>
+
+**Returns:** `ok`
+
+---
+
+## `checkAuthenticationBotToken`
+
+Authenticates a bot using its token. Replaces phone number auth for bots.
+
+<ParamField path="token" type="string" required>
+  The bot token from [@BotFather](https://t.me/botfather).
+</ParamField>
+
+**Returns:** `ok`
+
+---
+
+## `logOut`
+
+Logs the current user out and closes the TDLib instance. Triggers `authorizationStateLoggingOut` then `authorizationStateClosed`.
+
+**Returns:** `ok`
+
+---
+
+## `close`
+
+Closes the TDLib instance without logging out. Local data is preserved. Triggers `authorizationStateClosing` then `authorizationStateClosed`.
+
+**Returns:** `ok`
+
+---
+
+## `getAuthorizationState`
+
+Returns the current authorization state synchronously.
+
+**Returns:** An `AuthorizationState` object (one of the `authorizationState*` types).
+
+<Note>
+You rarely need to call this directly. TDLib pushes `updateAuthorizationState` automatically whenever the state changes.
+</Note>

@@ -1,0 +1,81 @@
+---
+title: "Versioning and compatibility"
+description: "How TDLib versioning works and how to support multiple TDLib versions."
+---
+
+TDLib uses semantic versioning for its JSON interface. Understanding versioning helps you write code that works reliably across TDLib releases.
+
+## Semantic versioning rules
+
+- **Same major version** — binary and backward compatible. You can upgrade without changing your code.
+- **Different minor or patch versions** — the underlying API may differ. New methods may be added or old ones deprecated.
+- **Major version bump** — breaking changes. Code written for TDLib 1.x is not guaranteed to work with TDLib 2.x.
+
+<Note>
+The JSON interface adheres to semantic versioning, but the TL schema methods available can vary between minor versions. Always check the version at runtime if you need to support a range of TDLib builds.
+</Note>
+
+## Detecting the TDLib version at runtime
+
+Use the synchronous `getOption` request with `name = "version"` to read the current TDLib version string:
+
+```python
+result = td_execute(json.dumps({
+    "@type": "getOption",
+    "name": "version"
+}))
+# result["value"]["@type"] == "optionValueString"
+# result["value"]["value"] == "1.8.62" (example)
+version = result["value"]["value"]
+```
+
+```cpp
+auto result = ClientManager::execute(
+    td_api::make_object<td_api::getOption>("version")
+);
+// cast result to td_api::optionValueString and read ->value_
+```
+
+## Conditional API usage
+
+If you support multiple TDLib versions, gate newer method calls behind a version check:
+
+```python
+import re
+
+def parse_version(version_str):
+    parts = version_str.split(".")
+    return tuple(int(p) for p in parts)
+
+tdlib_version = parse_version(get_tdlib_version())
+
+if tdlib_version >= (1, 8, 0):
+    # Use int53 user/chat IDs
+    pass
+else:
+    # Use int32 IDs (older behavior)
+    pass
+```
+
+## Notable breaking changes in 1.8.0
+
+TDLib 1.8.0 introduced several breaking changes. If you are migrating from an earlier version:
+
+<AccordionGroup>
+  <Accordion title="User, group, and supergroup ID types changed from int32 to int53">
+    IDs for users, basic groups, and supergroups changed from `int32` to `int53`. Ensure your language's JSON parser handles large integers correctly (JavaScript's `JSON.parse` may lose precision — use a bigint-aware parser).
+  </Accordion>
+  <Accordion title="getChats renamed to loadChats">
+    The method `getChats` was renamed to `loadChats` and its offset parameters were removed. A new convenience method `getChats` was added that returns chats from the beginning of the list.
+  </Accordion>
+  <Accordion title="sender field renamed to sender_id">
+    Several fields named `sender` were renamed to `sender_id` in `message`, `searchChatMessages`, and related classes.
+  </Accordion>
+  <Accordion title="deleteSupergroup removed">
+    `deleteSupergroup` was removed in favor of `deleteChat`, which works for all chat types.
+  </Accordion>
+</AccordionGroup>
+
+## Staying up to date
+
+Review the [CHANGELOG](https://github.com/tdlib/td/blob/master/CHANGELOG.md) before upgrading. Each release documents added, changed, and removed methods so you can audit your usage before migrating.

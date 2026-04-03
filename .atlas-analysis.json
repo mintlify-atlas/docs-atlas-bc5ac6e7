@@ -1,23 +1,11 @@
 {
-  "$schema": "https://mintlify.com/docs.json",
-  "name": "TDLib",
+  "projectType": "sdk-library",
+  "projectName": "TDLib",
+  "projectDescription": "A cross-platform C++ library for building Telegram clients, exposing a fully-asynchronous API via C++, JSON, Java (JNI), and .NET interfaces.",
   "theme": "luma",
-  "colors": {
-    "primary": "#27a5e4",
-    "light": "#73c5ed"
-  },
-  "favicon": "https://media.brand.dev/40bdbb0a-a5ff-4672-a0fe-edb5d54243cf.png",
-  "navbar": {
-    "primary": {
-      "type": "github",
-      "href": "https://github.com/tdlib/td"
-    }
-  },
-  "footer": {
-    "socials": {
-      "github": "https://github.com/tdlib/td"
-    }
-  },
+  "primaryColor": "#27a5e4",
+  "lightColor": "#73c5ed",
+  "darkColor": null,
   "navigation": {
     "tabs": [
       {
@@ -91,5 +79,31 @@
         ]
       }
     ]
-  }
+  },
+  "keyFeatures": [
+    "Cross-platform support (Android, iOS, Windows, macOS, Linux, WebAssembly, and more)",
+    "Fully-asynchronous, non-blocking request/response model",
+    "JSON interface usable from any language that can call C functions",
+    "Native C++, Java (JNI), and .NET (C++/CLI/CX) bindings",
+    "End-to-end encrypted local data storage with user-provided encryption key",
+    "Consistent and ordered update delivery with reliable reconnection",
+    "Full Telegram API coverage including messages, chats, files, calls, and bots"
+  ],
+  "publicApiSurface": [
+    "td_create_client_id()",
+    "td_send(client_id, request)",
+    "td_receive(timeout)",
+    "td_execute(request)",
+    "td_set_log_message_callback(max_verbosity_level, callback)",
+    "ClientManager::create_client_id()",
+    "ClientManager::send(client_id, request_id, request)",
+    "ClientManager::receive(timeout)",
+    "ClientManager::execute(request)",
+    "ClientManager::set_log_message_callback(max_verbosity_level, callback)",
+    "Client::send(request)",
+    "Client::receive(timeout)",
+    "Client::execute(request)",
+    "td_api::Function (base class for all TDLib API methods)",
+    "td_api::Object (base class for all TDLib API objects)"
+  ]
 }

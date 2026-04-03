@@ -1,0 +1,110 @@
+---
+title: ".NET Interface"
+description: "Use TDLib from C# and other .NET languages via C++/CLI or C++/CX."
+---
+
+TDLib provides native .NET bindings through two C++ language extensions: C++/CLI (for .NET Framework and .NET Core on Windows) and C++/CX (for Universal Windows Platform). Both are enabled at build time via CMake options.
+
+## Choosing a binding mode
+
+<Tabs>
+  <Tab title="C++/CLI">
+    C++/CLI produces managed assemblies that work with .NET Framework and .NET Core 3.1+ on Windows.
+
+    Enable it by passing `-DTD_ENABLE_DOTNET=ON` to CMake:
+
+    ```bash building with C++/CLI
+    mkdir build && cd build
+    cmake -DCMAKE_BUILD_TYPE=Release -DTD_ENABLE_DOTNET=ON ..
+    cmake --build .
+    ```
+
+    <Note>
+      .NET Core supports C++/CLI only since version 3.1, and only on Windows. If you need to support older .NET Core versions or need cross-platform portability, use the [JSON interface](/guides/json-interface) via P/Invoke instead.
+    </Note>
+  </Tab>
+  <Tab title="C++/CX (UWP)">
+    C++/CX targets the Universal Windows Platform (WinRT) component model. Enable it with `-DTD_ENABLE_DOTNET=CX`:
+
+    ```bash building with C++/CX
+    mkdir build && cd build
+    cmake -DCMAKE_BUILD_TYPE=Release -DTD_ENABLE_DOTNET=CX ..
+    cmake --build .
+    ```
+
+    See `example/uwp` for the Visual Studio Extension "TDLib for Universal Windows Platform" and a complete UWP C# example.
+  </Tab>
+  <Tab title="JSON + P/Invoke (cross-platform)">
+    For cross-platform .NET Core applications or environments where C++/CLI is not available, call the [JSON interface](/guides/json-interface) functions through P/Invoke:
+
+    ```csharp P/Invoke declarations
+    using System.Runtime.InteropServices;
+
+    static class TdLib
+    {
+        [DllImport("tdjson")]
+        public static extern int td_create_client_id();
+
+        [DllImport("tdjson")]
+        public static extern void td_send(int clientId,
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string request);
+
+        [DllImport("tdjson")]
+        [return: MarshalAs(UnmanagedType.LPUTF8Str)]
+        public static extern string td_receive(double timeout);
+
+        [DllImport("tdjson")]
+        [return: MarshalAs(UnmanagedType.LPUTF8Str)]
+        public static extern string td_execute(
+            [MarshalAs(UnmanagedType.LPUTF8Str)] string request);
+    }
+    ```
+
+    See [tdsharp](https://github.com/egramtel/tdsharp) for a complete, maintained cross-platform .NET Core wrapper built on this approach.
+  </Tab>
+</Tabs>
+
+## Examples in the repository
+
+| Directory | Description |
+|---|---|
+| `example/csharp` | C++/CLI build instructions and a C# Windows desktop example. |
+| `example/uwp` | C++/CX build for UWP; includes the Visual Studio Extension and a C# UWP sample application. |
+
+## Restoring C++ documentation after a .NET build
+
+When TDLib is built with either `TD_ENABLE_DOTNET` option, the C++ documentation comments are stripped from several header files. To restore them, run:
+
+```bash restoring header documentation
+git checkout td/telegram/Client.h td/telegram/Log.h td/tl/TlObject.h
+```
+
+<Warning>
+  Remember to run this `git checkout` before switching back to a non-.NET build, otherwise the missing documentation may cause issues with tools that parse the headers.
+</Warning>
+
+## Community libraries
+
+Several community projects provide higher-level .NET wrappers:
+
+- [tdlib-netcore](https://github.com/dantmnf/tdlib-netcore) — SWIG-like binding with automatically generated classes for all TDLib API methods.
+- [tdsharp](https://github.com/egramtel/tdsharp) — Cross-platform .NET Core wrapper using the JSON interface.
+- [Unigram](https://github.com/UnigramDev/Unigram) — Full-featured Telegram client for UWP built on the TDLib SDK for Universal Windows Platform.
+- [egram.tel](https://github.com/egramtel/egram.tel) — Cross-platform Telegram client in C#, .NET Core, ReactiveUI, and Avalonia.
+
+## Further reading
+
+<CardGroup cols={2}>
+  <Card title="Building TDLib" icon="hammer" href="/building">
+    Complete build instructions including .NET options.
+  </Card>
+  <Card title="JSON interface" icon="braces" href="/guides/json-interface">
+    Using TDLib via P/Invoke for cross-platform .NET.
+  </Card>
+  <Card title="Authorization" icon="lock" href="/concepts/authorization">
+    The TDLib authorization state machine.
+  </Card>
+  <Card title="Other languages" icon="globe" href="/guides/other-languages">
+    Community bindings for Go, Rust, Swift, and more.
+  </Card>
+</CardGroup>

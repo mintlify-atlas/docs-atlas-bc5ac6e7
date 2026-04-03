@@ -1,0 +1,62 @@
+---
+title: "Introduction"
+description: "What TDLib is, why it exists, and how it fits into the Telegram ecosystem."
+---
+
+TDLib (Telegram Database Library) is an open-source, cross-platform C++ library for building full-featured Telegram clients. It handles all the low-level details — MTProto encryption, network communication, local data storage, update ordering, and reconnection logic — so you can focus on your application's functionality rather than the protocol.
+
+## Key features
+
+**Cross-platform.** TDLib runs on Android, iOS, Windows, macOS, Linux, FreeBSD, OpenBSD, NetBSD, illumos, Windows Phone, WebAssembly, watchOS, tvOS, visionOS, Tizen, and Cygwin. It should also work on other Unix-like systems with minimal or no modification.
+
+**Multilanguage.** TDLib exposes a simple C interface through its JSON API, which means any language that can call C functions can use it. It also ships with native bindings for Java (via JNI) and .NET (via C++/CLI and C++/CX).
+
+**Fully asynchronous.** Requests to TDLib never block each other. You can send thousands of concurrent requests and receive responses as they arrive. In the Telegram Bot API, each TDLib instance handles more than 25,000 active bots simultaneously.
+
+**Well-documented.** Every TDLib API method and public interface is fully documented. The complete TL schema and generated HTML reference are available for all available methods and classes.
+
+**Secure.** All local data is encrypted using a user-provided encryption key. MTProto encryption is handled automatically.
+
+**Reliable.** TDLib guarantees that all updates are delivered in the correct order and remains stable on slow or unreliable internet connections.
+
+**Easy to integrate.** TDLib takes care of all network implementation details, encryption, and local data storage. You do not need to implement or understand the MTProto protocol to build a working Telegram client.
+
+## Available interfaces
+
+TDLib provides four main interfaces depending on your language and use case:
+
+| Interface | Target | CMake target |
+|-----------|--------|--------------|
+| JSON/C | Any language that can call C functions | `Td::TdJson`, `Td::TdJsonStatic` |
+| C++ | Native C++ applications | `Td::TdStatic` |
+| Java (JNI) | Java and JVM-based languages | Requires `-DTD_ENABLE_JNI=ON` |
+| .NET (C++/CLI or C++/CX) | C# and other .NET languages | Requires `-DTD_ENABLE_DOTNET=ON` or `=CX` |
+
+For most use cases — especially when working in Python, JavaScript, Go, Ruby, or other scripting languages — the JSON interface is the recommended starting point. It serializes all API objects as JSON and communicates over a simple C ABI.
+
+## TDLib vs Telegram Bot API
+
+The **Telegram Bot API** is a hosted HTTP service for building bots. It has a simpler interface, but it only supports bot accounts and does not give you direct control over the MTProto connection.
+
+**TDLib** is for building full Telegram clients — both user accounts and bots. It runs in your process, stores data locally, and gives you complete access to the Telegram API including features not available through the Bot API. You are responsible for hosting and managing the library yourself.
+
+## License
+
+TDLib is licensed under the [Boost Software License 1.0](http://www.boost.org/LICENSE_1_0.txt) (BSL-1.0). You can use, modify, and distribute it freely in both open-source and commercial projects.
+
+## Where to go next
+
+<CardGroup cols={2}>
+  <Card title="Quick start" icon="rocket" href="/quickstart">
+    Get a working TDLib client running in minutes using the JSON interface from Python.
+  </Card>
+  <Card title="Building TDLib" icon="hammer" href="/building">
+    Compile TDLib from source for your target platform and programming language.
+  </Card>
+  <Card title="JSON interface guide" icon="brackets-curly" href="/guides/json-interface">
+    Learn how the JSON/C interface works and how to use it from any language.
+  </Card>
+  <Card title="JSON client API reference" icon="book" href="/api/json-client">
+    Full reference for all `td_json_client.h` functions.
+  </Card>
+</CardGroup>

@@ -1,0 +1,99 @@
+---
+title: "Other Languages"
+description: "Use TDLib from Go, Rust, Swift, Python wrappers, and many more languages."
+---
+
+TDLib works from any language that can call C functions. The [JSON interface](/guides/json-interface) is the universal bridge: load `libtdjson`, call the four C functions, and exchange JSON strings. Dozens of community libraries wrap this interface for specific languages.
+
+## Major language bindings
+
+<CardGroup cols={2}>
+  <Card title="Go" icon="code" href="https://github.com/zelenin/go-tdlib">
+    **go-tdlib** — TDLib client for Go using Cgo and the JSON interface. Supports static and dynamic linking, and includes a generator for TDLib API classes.
+  </Card>
+  <Card title="Rust" icon="code" href="https://github.com/antonio-antuan/rust-tdlib">
+    **rust-tdlib** — Async Rust client with automatically generated, fully-documented types for all TDLib API methods and objects.
+  </Card>
+  <Card title="Swift" icon="code" href="https://github.com/Swiftgram/TDLibKit">
+    **TDLibKit** — Swift package with automatically generated and fully-documented classes for all TDLib API methods. Supports iOS, macOS, watchOS, tvOS, and visionOS.
+  </Card>
+  <Card title="JavaScript / Node.js" icon="code" href="https://github.com/eilvelia/tdl">
+    **tdl** — Fully-asynchronous Node.js interface for TDLib with many examples. Also see **Airgram** for a TypeScript/JavaScript framework.
+  </Card>
+  <Card title="Python" icon="code" href="https://github.com/alexander-akhmetov/python-telegram">
+    **python-telegram** — asyncio-based Python wrapper with full documentation and pip/Docker support. Also see **aiotdlib** and **Pytdbot** for Python 3.9+.
+  </Card>
+  <Card title="PHP" icon="code" href="https://github.com/aurimasniekis/php-ffi-tdlib">
+    **ffi-tdlib** — PHP 7.4+ wrapper using the PHP FFI extension to call TDLib directly without a compiled PHP extension.
+  </Card>
+  <Card title="Ruby" icon="code" href="https://github.com/southbridgeio/tdlib-ruby">
+    **tdlib-ruby** — Ruby bindings and a high-level client for TDLib using the JSON interface.
+  </Card>
+  <Card title="Dart / Flutter" icon="code" href="https://github.com/ivk1800/tdlib-dart">
+    **tdlib-dart** — Dart client with automatically generated and fully-documented classes for all TDLib API methods. Works with Flutter via Dart FFI.
+  </Card>
+</CardGroup>
+
+## All supported languages
+
+The table below lists every language with known TDLib bindings. All of them use the [JSON interface](/guides/json-interface) unless noted otherwise.
+
+| Language | Notable libraries | Notes |
+|---|---|---|
+| Python | python-telegram, aiotdlib, Pytdbot, pytdlib | asyncio wrappers available |
+| JavaScript | tdl, Airgram, tdweb | tdweb for browser/WASM |
+| Go | go-tdlib (zelenin), go-tdlib (Arman92) | via Cgo |
+| Java | generated JNI binding | native; see [Java interface](/guides/java-interface) |
+| Kotlin | ktd, td-ktx | same JNI binding as Java |
+| C# / .NET | tdsharp, tdlib-netcore, Unigram | native C++/CLI; see [.NET interface](/guides/dotnet-interface) |
+| C++ | `td::ClientManager` | native; see [C++ interface](/guides/cpp-interface) |
+| Swift | TDLibKit, tdlib-swift, TDLib-iOS | iOS/macOS examples in `example/ios` |
+| Objective-C | — | via JSON interface; `example/ios` |
+| Rust | rust-tdlib, tdlib-rs, rtdlib | async support available |
+| Dart | tdlib-dart, dart_tdlib, flutter_libtdjson | Dart FFI or Native Extension |
+| PHP | ffi-tdlib, tdlib-php-ffi, phptdlib | FFI (PHP 7.4+) or compiled extension |
+| Ruby | tdlib-ruby | — |
+| Lua | luajit-tdlib, tdlua, tdbot | — |
+| Erlang | erl-tdlib | — |
+| Elixir | elixir-tdlib | auto-generated typed classes |
+| Haskell | haskell-tdlib, tdlib | auto-generated typed classes |
+| Nim | telenim | — |
+| Clojure | clojure-tdlib-json | — |
+| Crystal | Proton | auto-generated types |
+| D | d-tdlib-service | — |
+| Vala | td-vala | — |
+| Emacs Lisp | telega.el | full Emacs client |
+| Object Pascal | tdlib-delphi, tdlib-lazarus | Delphi and Lazarus |
+| C | easy-tg | static or dynamic linking |
+| Assembly | nasm_tdjson_example | x86, ARM, ARM64 examples |
+| 1С:Enterprise | telegram-native, e1c.tAgents | — |
+| G (LabVIEW) | TDLib bindings for LabVIEW | graphical language |
+
+## Any language without a listed binding
+
+If your language is not listed, you have two options:
+
+1. **Call the JSON interface directly.** Any language with a C FFI and a JSON library can call `td_create_client_id`, `td_send`, `td_receive`, and `td_execute`. See the [JSON interface guide](/guides/json-interface) for the complete pattern.
+
+2. **Use a CLI bridge.** [tdbot](https://github.com/vysheng/tdbot) and [TDLib JSON CLI](https://github.com/oott123/tdlib-json-cli) provide a command-line tool that exposes TDLib over stdin/stdout as JSON, so any language that can spawn a process and read its output can talk to TDLib.
+
+<Tip>
+  If you create a new TDLib binding, consider opening an issue in the [tdlib/td](https://github.com/tdlib/td) repository to have it added to the official examples list.
+</Tip>
+
+## Further reading
+
+<CardGroup cols={2}>
+  <Card title="JSON interface" icon="braces" href="/guides/json-interface">
+    Core guide for using TDLib from any language.
+  </Card>
+  <Card title="Building TDLib" icon="hammer" href="/building">
+    Compiling the tdjson shared library for your platform.
+  </Card>
+  <Card title="Java interface" icon="coffee" href="/guides/java-interface">
+    Native JNI binding for Java and Kotlin.
+  </Card>
+  <Card title=".NET interface" icon="windows" href="/guides/dotnet-interface">
+    Native C++/CLI and C++/CX bindings for .NET.
+  </Card>
+</CardGroup>

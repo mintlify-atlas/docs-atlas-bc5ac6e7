@@ -1,0 +1,92 @@
+---
+title: "Low-memory builds"
+description: "Build TDLib on devices with limited RAM using the SplitSource script."
+---
+
+TDLib is a large library. Some of its auto-generated source files require more than 1 GB of RAM to compile as single translation units. On devices with constrained memory — embedded systems, low-end VPS instances, or Raspberry Pi boards — the compiler will be killed by the OOM killer before the build completes.
+
+The `SplitSource.php` script solves this by splitting the largest source files into smaller chunks. Each chunk requires significantly less memory to compile, making it possible to build TDLib on hardware that would otherwise run out of RAM.
+
+## Memory requirements after splitting
+
+| Compiler | RAM per file (after splitting) |
+|----------|-------------------------------|
+| Clang 6.0 with libc++ | Less than 500 MB |
+| GCC 4.9 / GCC 6.3 | Less than 1 GB |
+
+## Step-by-step build process
+
+<Steps>
+  <Step title="Install PHP">
+    The script requires PHP to be available on your PATH. On Debian/Ubuntu:
+
+    ```bash
+    sudo apt-get install -y php-cli
+    ```
+
+    Verify the installation:
+
+    ```bash
+    php --version
+    ```
+  </Step>
+
+  <Step title="Run SplitSource.php">
+    From the root of the TDLib source tree, run:
+
+    ```bash
+    php SplitSource.php
+    ```
+
+    This rewrites the large auto-generated source files in-place, splitting each one into multiple smaller files. The original files are preserved so the operation can be undone.
+  </Step>
+
+  <Step title="Configure and build only the targets you need">
+    Create a build directory, configure with CMake, and build only the JSON library targets. Building all targets is not necessary and would take longer.
+
+    ```bash
+    mkdir build
+    cd build
+    cmake -DCMAKE_BUILD_TYPE=Release ..
+    cmake --build . --target tdjson
+    cmake --build . --target tdjson_static
+    cd ..
+    ```
+
+    `tdjson` produces the dynamic library (`libtdjson.so` / `tdjson.dll`). `tdjson_static` produces the static library. Build only the one you need if disk space is also a concern.
+  </Step>
+
+  <Step title="Undo the split">
+    After a successful build, restore the source files to their original state. This is important if you intend to commit changes or run subsequent CMake configurations that expect the original file layout.
+
+    ```bash
+    php SplitSource.php --undo
+    ```
+  </Step>
+</Steps>
+
+<Tip>
+  When cross-compiling for embedded devices (for example, targeting ARM from an x86 host), you can run the full split-and-build process on a machine with ample RAM and simply copy the resulting shared library to the target device. Cross-compilation avoids the memory constraint entirely. See the [TDLib build instructions generator](https://tdlib.github.io/td/build.html) for platform-specific cross-compilation flags.
+</Tip>
+
+## Limiting parallelism
+
+If you have enough RAM for a single compilation unit but run out when compiling in parallel, limit the number of concurrent jobs instead of (or in addition to) using `SplitSource.php`:
+
+```bash
+# Use at most 2 parallel jobs
+cmake --build . --target tdjson -- -j2
+```
+
+Combine this with `SplitSource.php` for the lowest possible peak memory usage.
+
+## Further reading
+
+<CardGroup cols={2}>
+  <Card title="Building TDLib" icon="hammer" href="/building">
+    Full build instructions, CMake options, and target descriptions.
+  </Card>
+  <Card title="JSON interface guide" icon="brackets-curly" href="/guides/json-interface">
+    How to use the compiled `tdjson` library from any programming language.
+  </Card>
+</CardGroup>
